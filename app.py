@@ -180,7 +180,7 @@ if menu == "記録する":
                 sup_data = supplements[selected_sup]
                 add_record(record_date, "サプリ", sup_data['foodName'], sup_data['nutrients'])
                 st.success(f"{sup_data['displayName']}を記録しました！")
-                st.experimental_rerun()
+                st.rerun() # ★修正点
 
         else: # 食事の場合
             input_method = st.radio("記録方法", ["テキスト入力", "画像から入力"])
@@ -205,7 +205,7 @@ if menu == "記録する":
                         }
                         add_record(record_date, meal_type, food_name, nutrients)
                         st.success(f"{food_name}を記録しました！")
-                        st.experimental_rerun()
+                        st.rerun() # ★修正点
                     else:
                         st.warning("食事名を入力してください。")
 
@@ -250,7 +250,7 @@ if menu == "記録する":
                             add_record(record_date, meal_type, food_name, nutrients)
                             st.success(f"{food_name}を記録しました！")
                             del st.session_state.analysis_result
-                            st.experimental_rerun()
+                            st.rerun() # ★修正点
                         else:
                             st.warning("食事名を入力してください。")
 
@@ -293,7 +293,7 @@ if menu == "記録する":
                 for record_id in ids_to_delete:
                     delete_record(record_id)
                 st.success("選択した記録を削除しました。")
-                st.experimental_rerun()
+                st.rerun() # ★修正点
 
 # --- 相談ページ ---
 elif menu == "相談する":
@@ -312,7 +312,7 @@ elif menu == "相談する":
     user_profile = """
     - 年齢: 35歳女性
     - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
-    - 希望: アンチエイジング
+    - 希望: アンチエイジング、不妊治療中
     - 苦手な食べ物: 生のトマト、納豆
     """
     
@@ -365,5 +365,3 @@ elif menu == "相談する":
         with st.spinner("AIがアドバイスを生成中です..."):
             advice = get_advice_from_gemini(prompt_to_send)
             st.markdown(advice)
-
-
