@@ -312,7 +312,7 @@ elif menu == "相談する":
     user_profile = """
     - 年齢: 35歳女性
     - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
-    - 希望: アンチエイジング、不妊治療中
+    - 希望: アンチエイジング
     - 苦手な食べ物: 生のトマト、納豆
     """
     
@@ -365,4 +365,5 @@ elif menu == "相談する":
         with st.spinner("AIがアドバイスを生成中です..."):
             advice = get_advice_from_gemini(prompt_to_send)
             st.markdown(advice)
+
 
