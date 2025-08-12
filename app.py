@@ -21,100 +21,69 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
 
-      :root {
-        --bg: #F7FAFC;            /* page background */
-        --panel: #FFFFFF;         /* card background */
-        --text: #111827;          /* high-contrast text */
-        --muted: #6B7280;         /* subdued text */
-        --border: #E5E7EB;        /* subtle borders */
-        --primary: #3B82F6;       /* blue-500 */
-        --primary-600: #2563EB;   /* blue-600 */
-        --primary-700: #1D4ED8;   /* blue-700 */
-        --accent: #22D3EE;        /* cyan-400 */
-        --warn: #EF4444;          /* red-500 */
-        --ok: #10B981;            /* emerald-500 */
-        --radius: 16px;
-      }
+  :root {
+    --bg: #F7FAFC;
+    --panel: #FFFFFF;
+    --text: #111827;
+    --muted: #6B7280;
+    --border: #E5E7EB;
+    --primary: #3B82F6;
+    --primary-600: #2563EB;
+    --primary-700: #1D4ED8;
+    --warn: #EF4444;
+    --ok: #10B981;
+    --radius: 16px;
+  }
 
-      html, body, [class*="st-"], [class*="css-"] {
-        font-family: 'Noto Sans JP', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
-        color: var(--text);
-      }
+  html, body, [class*="st-"], [class*="css-"] {
+    font-family: 'Noto Sans JP', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+    color: var(--text);
+  }
 
-      .stApp { background: var(--bg); }
+  .stApp { background: var(--bg); }
 
-      /* Hero */
-      .hero {
-        background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10));
-        border: 1px solid var(--border);
-        border-radius: var(--radius);
-        padding: 24px 28px;
-        margin: 8px 0 18px 0;
-      }
-      .hero-title { font-size: 28px; font-weight: 700; letter-spacing: .2px; }
-      .hero-sub { color: var(--muted); margin-top: 6px; }
+  /* Hero */
+  .hero { background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10)); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; margin: 8px 0 18px 0; }
+  .hero-title { font-size: 28px; font-weight: 700; letter-spacing: .2px; }
+  .hero-sub { color: var(--muted); margin-top: 6px; }
 
-      /* Card */
-      .card {
-        background: var(--panel);
-        border-radius: var(--radius);
-        border: 1px solid var(--border);
-        padding: 24px;
-        box-shadow: 0 8px 28px rgba(17,24,39,0.06);
-        margin-bottom: 18px;
-      }
+  /* Card */
+  .card { background: var(--panel); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; box-shadow: 0 8px 28px rgba(17,24,39,0.06); margin-bottom: 18px; }
 
-      /* Buttons */
-      .stButton>button {
-        border-radius: 10px;
-        border: 1px solid transparent;
-        padding: .7rem 1.1rem;
-        font-weight: 600;
-        background: var(--primary);
-        color: #fff;
-        transition: all .15s ease-in-out;
-      }
-      .stButton>button:hover { background: var(--primary-600); transform: translateY(-1px); }
-      .stButton>button:active { transform: translateY(0); }
+  /* Buttons */
+  .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; transition: all .15s ease-in-out; }
+  .stButton>button:hover { background: var(--primary-600) !important; transform: translateY(-1px); }
+  .stButton>button:active { transform: translateY(0); }
+  .stButton>button[kind="secondary"] { background: #fff !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+  .stButton>button[kind="secondary"]:hover { background: #F3F4F6 !important; }
+  .danger>button { background: var(--warn) !important; }
+  .danger>button:hover { background: #DC2626 !important; }
 
-      /* Secondary / danger variants by aria attributes when Streamlit sets type="primary" */
-      .stButton>button[kind="secondary"] { background: #fff; color: var(--text); border: 1px solid var(--border); }
-      .stButton>button[kind="secondary"]:hover { background: #F3F4F6; }
-      .danger>button { background: var(--warn) !important; }
-      .danger>button:hover { background: #DC2626 !important; }
+  /* Inputs (rounded corners + clean focus ring; remove dark corners) */
+  .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div { border-radius: 12px !important; overflow: hidden; }
+  .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div { background: #FFFFFF !important; border: 1px solid var(--border) !important; border-radius: 12px !important; box-shadow: none !important; color: var(--text) !important; }
+  .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox>div>div:focus { outline: none !important; border-color: var(--primary) !important; box-shadow: 0 0 0 4px rgba(59,130,246,.15) !important; }
 
-      /* Inputs */
-      input, textarea, select { color: var(--text) !important; }
-      .stTextInput>div>div>input,
-      .stNumberInput input,
-      .stDateInput input,
-      .stSelectbox>div>div {
-        background: #FAFAFA !important;
-        border: 1px solid var(--border) !important;
-        border-radius: 10px !important;
-      }
+  /* Tabs */
+  .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
+  .stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--muted); }
+  .stTabs [aria-selected="true"] { color: var(--primary); border-bottom: 2px solid var(--primary); }
 
-      /* Tabs */
-      .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
-      .stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--muted); }
-      .stTabs [aria-selected="true"] { color: var(--primary); border-bottom: 2px solid var(--primary); }
+  /* Sidebar */
+  [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--border); }
 
-      /* Chips */
-      .chip {
-        display:inline-block; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); color: var(--muted);
-      }
-      .chip.meal { color: var(--primary-700); border-color: rgba(59,130,246,.35); background: rgba(59,130,246,.06); }
-      .chip.sup { color: #7C3AED; border-color: rgba(124,58,237,.35); background: rgba(124,58,237,.06); }
-      .chip.water { color: #0EA5E9; border-color: rgba(14,165,233,.35); background: rgba(14,165,233,.06); }
+  /* Datepicker / Popover (force light theme) */
+  [data-baseweb="popover"] { background: #FFFFFF !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
+  [data-baseweb="popover"] * { color: var(--text) !important; }
+  [role="dialog"], [data-baseweb="datepicker"], [data-baseweb="calendar"] { background: #FFFFFF !important; color: var(--text) !important; }
+  [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
+  [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
-      /* Data editor tweaks */
-      [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
-
-      /* Sidebar */
-      [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--border); }
-    </style>
+  /* Data editor tweaks */
+  [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
+</style>
     """,
     unsafe_allow_html=True,
 )
@@ -433,7 +402,7 @@ if menu == "記録する":
                     zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
                     folic_acid = cols[1].number_input("葉酸 (μg)", value=0.0, format="%.1f")
 
-                    if st.form_submit_button("食事を記録する", use_container_width=True):
+                    if st.form_submit_button("食事を記録する", use_container_width=True, type="primary"):
                         if food_name:
                             nutrients = {
                                 "calories": calories,
@@ -481,7 +450,7 @@ if menu == "記録する":
                         zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get("zinc", 0) or 0.0), format="%.1f")
                         folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get("folic_acid", 0) or 0.0), format="%.1f")
 
-                        if st.form_submit_button("この内容で食事を記録する", use_container_width=True):
+                        if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
                             if food_name:
                                 nutrients = {
                                     "calories": calories,
@@ -524,14 +493,8 @@ if menu == "記録する":
                     return "ー"
                 return f"{int(row['calories'])} kcal" if pd.notna(row["calories"]) else "ー"
 
-            display_df["種類"] = display_df["meal_type"].apply(fmt_meal_chip)
+            display_df["種類"] = display_df["meal_type"]
             display_df["カロリー/量"] = display_df.apply(format_calories, axis=1)
-
-            # Render HTML in type column
-            st.write(
-                "<style>td:nth-child(2) {white-space: nowrap;}</style>",
-                unsafe_allow_html=True,
-            )
 
             edited_df = st.data_editor(
                 display_df[["date", "種類", "food_name", "カロリー/量", "削除"]],
