@@ -12,7 +12,7 @@ import io
 # =============================
 st.set_page_config(
     page_title="食生活アドバイザー",
-    page_icon="💧",
+    page_icon="🍽",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -352,6 +352,48 @@ def _answer_about_meal(food_name: str, nutrients: dict, question: str) -> str:
         return resp.text
     except Exception as e:
         return f"回答生成に失敗しました: {e}"
+
+# =============================
+# Utils for supplement-driven refinement
+# =============================
+
+def _refine_by_note(food_name: str, nutrients: dict, note: str) -> dict | None:
+    """自然言語の補足を反映して、料理名/栄養値を上書き候補として返す。
+    返り値: {"foodName": str, "nutrients": {...}, "note": str} または None
+    """
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    base_json = json.dumps({"foodName": food_name, "nutrients": nutrients}, ensure_ascii=False)
+    schema = """
+以下のJSONのみを返してください。説明不要。コードフェンス不要。
+{
+  "foodName": "料理名（変更不要ならそのまま）",
+  "nutrients": {
+    "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0,
+    "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0
+  },
+  "note": "補正内容の要約（20字以内）"
+}
+"""
+    prompt = (
+        "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。"
+        "単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。"
+        "可能な範囲で妥当な値に丸めてください（1〜2桁）。
+
+"
+        f"現在の推定: {base_json}
+補足: {note}
+
+" + schema
+    )
+    try:
+        resp = model.generate_content(prompt)
+        txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+        data = json.loads(txt)
+        if isinstance(data, dict) and data.get("nutrients"):
+            return data
+    except Exception:
+        return None
+    return None
 
 # =============================
 # Utils: NL → DataFrame query planner
@@ -777,33 +819,70 @@ if menu == "記録する":
 
                     factor = float(st.session_state.serve_factor)
                     scaled = _scale_nutrients(base_pack, factor)
+                    effective = st.session_state.get("supp_nutrients", scaled) if st.session_state.get("supp_adopted") else scaled
 
                     with fc1:
-                        st.caption("プレビュー（食べた量で自動スケール）")
+                        st.caption("プレビュー（現在の反映値）")
                         m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("カロリー", f"{scaled['calories']:.0f} kcal")
-                        m2.metric("たんぱく質", f"{scaled['protein']:.1f} g")
-                        m3.metric("炭水化物", f"{scaled['carbohydrates']:.1f} g")
-                        m4.metric("脂質", f"{scaled['fat']:.1f} g")
+                        m1.metric("カロリー", f"{effective['calories']:.0f} kcal")
+                        m2.metric("たんぱく質", f"{effective['protein']:.1f} g")
+                        m3.metric("炭水化物", f"{effective['carbohydrates']:.1f} g")
+                        m4.metric("脂質", f"{effective['fat']:.1f} g")
 
                     st.divider()
-                    st.caption("この料理について質問（例：『他に特徴的な栄養素ある？』『塩分は控えめ？』など）")
-                    q2 = st.text_input("質問を入力", key="meal_q")
-                    if st.button("質問する", key="meal_q_btn"):
-                        with st.spinner("回答中..."):
-                            ans = _answer_about_meal(base_food or "料理", scaled, q2)
-                        st.markdown(ans)
+                    st.caption("この料理についての補足説明（任意）")
+                    note = st.text_area("補足を入力", key="meal_note", placeholder="例：豚肉は70gくらい、味噌汁は具少なめ など")
+
+                    # 現在の反映値をベースに補足を適用
+                    current_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
+                    current_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
+
+                    if st.button("補足を解析して反映案を作る", key="apply_note_btn"):
+                        with st.spinner("補足を解析中..."):
+                            cand = _refine_by_note(current_food or "料理", current_pack, note or "")
+                        if cand and "nutrients" in cand:
+                            st.session_state.supp_candidate = cand
+                            st.success("反映案を作成しました。下の比較を確認してください。")
+                        else:
+                            st.warning("補足の解釈に失敗しました。もう少し具体的に書いてください。")
+
+                    if "supp_candidate" in st.session_state:
+                        cand = st.session_state.supp_candidate
+                        cand_food = cand.get("foodName") or current_food
+                        cand_pack = cand.get("nutrients") or current_pack
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.caption("現在の値")
+                            st.dataframe(pd.DataFrame([current_pack]))
+                        with c2:
+                            st.caption("反映案")
+                            st.dataframe(pd.DataFrame([cand_pack]))
+                        a1, a2 = st.columns(2)
+                        if a1.button("この変更を採用", key="accept_note"):
+                            st.session_state.supp_food_name = cand_food
+                            st.session_state.supp_nutrients = cand_pack
+                            st.session_state.supp_adopted = True
+                            del st.session_state.supp_candidate
+                            st.success("補足を反映しました。さらに追記して微調整もできます。")
+                            st.rerun()
+                        if a2.button("反映案を破棄", key="discard_note"):
+                            del st.session_state.supp_candidate
+                            st.info("反映案を破棄しました。")
+
+                    # 最終的にフォームへ渡す値
+                    final_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
+                    final_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
 
                     with st.form(key="image_confirm_form"):
-                        food_name = st.text_input("食事名", value=base_food)
+                        food_name = st.text_input("食事名", value=final_food)
                         cols = st.columns(2)
-                        calories = cols[0].number_input("カロリー (kcal)", value=float(scaled.get("calories", 0.0)), format="%.1f")
-                        protein = cols[1].number_input("たんぱく質 (g)", value=float(scaled.get("protein", 0.0)), format="%.1f")
-                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(scaled.get("carbohydrates", 0.0)), format="%.1f")
-                        fat = cols[1].number_input("脂質 (g)", value=float(scaled.get("fat", 0.0)), format="%.1f")
-                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(scaled.get("vitaminD", 0.0)), format="%.1f")
-                        salt = cols[1].number_input("食塩相当量 (g)", value=float(scaled.get("salt", 0.0)), format="%.1f")
-                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(scaled.get("zinc", 0.0)), format="%.1f")
+                        calories = cols[0].number_input("カロリー (kcal)", value=float(final_pack.get("calories", 0.0)), format="%.1f")
+                        protein = cols[1].number_input("たんぱく質 (g)", value=float(final_pack.get("protein", 0.0)), format="%.1f")
+                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(final_pack.get("carbohydrates", 0.0)), format="%.1f")
+                        fat = cols[1].number_input("脂質 (g)", value=float(final_pack.get("fat", 0.0)), format="%.1f")
+                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(final_pack.get("vitaminD", 0.0)), format="%.1f")
+                        salt = cols[1].number_input("食塩相当量 (g)", value=float(final_pack.get("salt", 0.0)), format="%.1f")
+                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(final_pack.get("zinc", 0.0)), format="%.1f")
 
                         if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
                             if food_name:
@@ -906,90 +985,4 @@ if menu == "記録する":
                         plan = _postprocess_plan(q, plan)
                         out_df, summary = _execute_plan(all_records_df, plan)
                     st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
-                    st.write(summary)
-                    if not out_df.empty:
-                        st.dataframe(out_df, use_container_width=True)
-                    else:
-                        st.info("該当データがありません。キーワードや期間を変えてみてください。")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# =============================
-# ADVICE
-# =============================
-elif menu == "相談する":
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("AIに相談する")
-
-        all_records_df = get_all_records()
-        if all_records_df.empty:
-            st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
-            st.stop()
-
-        user_profile = (
-            """
-            - 年齢: 35歳女性
-            - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
-            - 希望: アンチエイジング
-            - 苦手な食べ物: 生のトマト、納豆
-            """
-        )
-        prompt_qna = f"""
-あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
-出力ルール:
-- 挨拶・導入・締めの定型文は不要
-- 年齢・性別などの呼称を本文に含めない
-- 回答は必要な要点のみ（最大5項目の箇条書き中心）
-- 記録に基づく引用は最小限の数値のみ
-
-参考情報（出力に含めない）:
-{user_profile}
-"""
-
-        prompt_full = f"""
-あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
-出力はMarkdownで、次の構成を必ず含めてください:
-## 概要
-## 良かった点
-## 改善ポイント
-## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
-## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
-## 具体的アクションプラン（食事例3〜5・買い物リスト）
-## 次の7日間の目標
-注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
-
-参考情報（出力に含めない）:
-{user_profile}
-        """
-        prompt_to_send = ""
-
-        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
-
-        with tab1:
-            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
-            if st.button("AIに相談する", key="text_consult"):
-                if question:
-                    record_history = all_records_df.head(30).to_string(index=False)
-                    prompt_to_send = (
-                        f"{prompt_qna}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
-                    )
-                else:
-                    st.warning("相談内容を入力してください。")
-
-        with tab2:
-            st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
-            if st.button("アドバイスをもらう", key="all_consult"):
-                record_history = all_records_df.to_string(index=False)
-                prompt_to_send = f"""{prompt_full}# 全ての記録
-{record_history}
-
-記録データに即した網羅的な分析レポートを出力してください。
-"""
-
-        if prompt_to_send:
-            with st.spinner("AIがアドバイスを生成中です..."):
-                advice = get_advice_from_gemini(prompt_to_send)
-                with st.chat_message("ai", avatar="💬"):
-                    st.markdown(advice)
-
-        st.markdown('</div>', unsafe_allow_html=True)
+                    st.wri
