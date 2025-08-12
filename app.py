@@ -276,6 +276,86 @@ def get_advice_from_gemini(prompt):
 
 
 # =============================
+# Image-chat helpers (portion & Q&A)
+# =============================
+
+def _scale_nutrients(nut: dict, factor: float) -> dict:
+    keys = ["calories", "protein", "carbohydrates", "fat", "vitaminD", "salt", "zinc", "folic_acid"]
+    out = {}
+    for k in keys:
+        v = (nut or {}).get(k, 0)
+        try:
+            out[k] = round(float(v) * float(factor), 2)
+        except Exception:
+            out[k] = 0.0
+    return out
+
+
+def _parse_fraction_jp(text: str):
+    """『半分』『3分の1』『1/3』『1.5倍』『30%』などを係数に変換（正規表現なしの簡易版）。"""
+    if not text:
+        return None
+    t = str(text).strip()
+    # 半分
+    if "半分" in t:
+        return 0.5
+    # ○分の△
+    if "分の" in t:
+        parts = t.split("分の")
+        if len(parts) == 2:
+            try:
+                den = float(parts[0].strip())
+                num = float(parts[1].strip())
+                if den > 0:
+                    return num / den
+            except Exception:
+                pass
+    # a/b 形式
+    if "/" in t:
+        a_b = t.split("/")
+        if len(a_b) == 2:
+            try:
+                a = float(a_b[0].strip()); b = float(a_b[1].strip())
+                if b != 0:
+                    return a / b
+            except Exception:
+                pass
+    # 倍
+    if "倍" in t:
+        try:
+            return float(t.replace("倍", "").strip())
+        except Exception:
+            pass
+    # %
+    if "%" in t:
+        try:
+            return float(t.replace("%", "").strip()) / 100.0
+        except Exception:
+            pass
+    return None
+
+
+def _answer_about_meal(food_name: str, nutrients: dict, question: str) -> str:
+    """栄養の特色などを簡潔に返す。"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    context = f"""
+あなたは管理栄養士です。以下の食品とその推定栄養（1食あたり、食べた量でスケール済み）を踏まえて、ユーザーの質問に簡潔に答えてください。
+- 料理名: {food_name}
+- 栄養: calories={nutrients.get('calories',0)} kcal, protein={nutrients.get('protein',0)} g, carbs={nutrients.get('carbohydrates',0)} g, fat={nutrients.get('fat',0)} g, vitaminD={nutrients.get('vitaminD',0)} μg, salt={nutrients.get('salt',0)} g, zinc={nutrients.get('zinc',0)} mg, folic_acid={nutrients.get('folic_acid',0)} μg
+出力ルール:
+- 余計な前置きは不要
+- 2〜4行の箇条書きで要点のみ
+- 不確実な点は推定であることを一言添える
+"""
+    try:
+        resp = model.generate_content(context + "
+
+質問: " + question)
+        return resp.text
+    except Exception as e:
+        return f"回答生成に失敗しました: {e}"
+
+# =============================
 # Utils: NL → DataFrame query planner
 # =============================
 
@@ -613,7 +693,7 @@ if menu == "記録する":
                         "protein": 0,
                         "carbohydrates": 0,
                         "fat": 0,
-                        "vitaminD": 0,  # \n<< FIXED: key was vitamin_d >>
+                        "vitaminD": 0,  # \n
                         "salt": 0,
                         "zinc": 0,
                         "folic_acid": 0,
@@ -670,22 +750,66 @@ if menu == "記録する":
                             st.error("分析に失敗しました。テキストで入力してください。")
 
                 if "analysis_result" in st.session_state:
-                    st.info("AIの推定値を確認し、必要に応じて修正してから記録してください。")
+                    st.info("AIの推定値を確認し、必要に応じて量を調整してから記録してください。")
                     result = st.session_state.analysis_result
+                    base_food = result.get("foodName", "")
+                    base_nut = result.get("nutrients", {})
+                    base_pack = {"calories": float(result.get("calories", 0) or 0.0), **base_nut}
+
+                    if "serve_factor" not in st.session_state:
+                        st.session_state.serve_factor = 1.0
+
+                    fc1, fc2 = st.columns([2, 1])
+                    with fc2:
+                        st.caption("食べた量（係数）")
+                        bcols = st.columns(7)
+                        if bcols[0].button("1/4"): st.session_state.serve_factor = 0.25
+                        if bcols[1].button("1/3"): st.session_state.serve_factor = 1/3
+                        if bcols[2].button("1/2"): st.session_state.serve_factor = 0.5
+                        if bcols[3].button("2/3"): st.session_state.serve_factor = 2/3
+                        if bcols[4].button("1x"):  st.session_state.serve_factor = 1.0
+                        if bcols[5].button("1.5x"): st.session_state.serve_factor = 1.5
+                        if bcols[6].button("2x"):  st.session_state.serve_factor = 2.0
+                        st.session_state.serve_factor = st.slider("係数", 0.1, 2.0, float(st.session_state.serve_factor), 0.05)
+                        instr = st.text_input("自然言語で量を指定（例：半分、3分の1、1.5倍、30%）", key="serve_text")
+                        if st.button("反映", key="serve_apply") and instr.strip():
+                            f = _parse_fraction_jp(instr)
+                            if f is not None:
+                                st.session_state.serve_factor = float(f)
+                                st.success(f"係数 {f} を反映しました。")
+                            else:
+                                st.warning("係数を解釈できませんでした。")
+
+                    factor = float(st.session_state.serve_factor)
+                    scaled = _scale_nutrients(base_pack, factor)
+
+                    with fc1:
+                        st.caption("プレビュー（食べた量で自動スケール）")
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("カロリー", f"{scaled['calories']:.0f} kcal")
+                        m2.metric("たんぱく質", f"{scaled['protein']:.1f} g")
+                        m3.metric("炭水化物", f"{scaled['carbohydrates']:.1f} g")
+                        m4.metric("脂質", f"{scaled['fat']:.1f} g")
+
+                    st.divider()
+                    st.caption("この料理について質問（例：『他に特徴的な栄養素ある？』『塩分は控えめ？』など）")
+                    q2 = st.text_input("質問を入力", key="meal_q")
+                    if st.button("質問する", key="meal_q_btn"):
+                        with st.spinner("回答中..."):
+                            ans = _answer_about_meal(base_food or "料理", scaled, q2)
+                        st.markdown(ans)
 
                     with st.form(key="image_confirm_form"):
-                        food_name = st.text_input("食事名", value=result.get("foodName", ""))
-                        nut = result.get("nutrients", {})
+                        food_name = st.text_input("食事名", value=base_food)
                         cols = st.columns(2)
-                        # << FIXED: calories is top-level in result >>
-                        calories = cols[0].number_input("カロリー (kcal)", value=float(result.get("calories", 0) or 0.0), format="%.1f")
-                        protein = cols[1].number_input("たんぱく質 (g)", value=float(nut.get("protein", 0) or 0.0), format="%.1f")
-                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(nut.get("carbohydrates", 0) or 0.0), format="%.1f")
-                        fat = cols[1].number_input("脂質 (g)", value=float(nut.get("fat", 0) or 0.0), format="%.1f")
-                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(nut.get("vitaminD", 0) or 0.0), format="%.1f")
-                        salt = cols[1].number_input("食塩相当量 (g)", value=float(nut.get("salt", 0) or 0.0), format="%.1f")
-                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get("zinc", 0) or 0.0), format="%.1f")
-                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get("folic_acid", 0) or 0.0), format="%.1f")
+                        calories = cols[0].number_input("カロリー (kcal)", value=float(scaled.get("calories", 0.0)), format="%.1f")
+                        protein = cols[1].number_input("たんぱく質 (g)", value=float(scaled.get("protein", 0.0)), format="%.1f")
+                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(scaled.get("carbohydrates", 0.0)), format="%.1f")
+                        fat = cols[1].number_input("脂質 (g)", value=float(scaled.get("fat", 0.0)), format="%.1f")
+                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(scaled.get("vitaminD", 0.0)), format="%.1f")
+                        salt = cols[1].number_input("食塩相当量 (g)", value=float(scaled.get("salt", 0.0)), format="%.1f")
+                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(scaled.get("zinc", 0.0)), format="%.1f")
+                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(scaled.get("folic_acid", 0.0)), format="%.1f")
 
                         if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
                             if food_name:
@@ -702,6 +826,7 @@ if menu == "記録する":
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
                                 del st.session_state.analysis_result
+                                st.session_state.pop("serve_factor", None)
                                 st.rerun()
                             else:
                                 st.warning("食事名を入力してください。")
