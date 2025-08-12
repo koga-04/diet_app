@@ -270,7 +270,6 @@ def analyze_image_with_gemini(image_bytes):
 
     st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
     return None
-    return None
 
 # =============================
 # Image-chat helpers (portion / supplement refine)
@@ -987,7 +986,76 @@ elif menu == "相談する":
 参考情報（出力に含めない）:
 {user_profile}
 """
-
-        prompt_full = f"""
+　　　　         prompt_full = f"""
 あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+出力はMarkdownで、次の構成を必ず含めてください:
+## 概要
+## 良かった点
+## 改善ポイント
+## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
+## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
+## 具体的アクションプラン（食事例3〜5・買い物リスト）
+## 次の7日間の目標
+注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
 
+参考情報（出力に含めない）:
+{user_profile}
+"""
+
+        prompt_to_send = ""
+
+        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
+
+        with tab1:
+            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
+            if st.button("AIに相談する", key="text_consult"):
+                if question:
+                    record_history = all_records_df.head(30).to_string(index=False)
+                    prompt_to_send = f"""{prompt_qna}# 記録（参考）
+{record_history}
+
+# 相談内容
+{question}
+
+上記相談内容に対して、記録を参考にしつつ回答してください。
+"""
+                else:
+                    st.warning("相談内容を入力してください。")
+
+        with tab2:
+            st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
+            if st.button("アドバイスをもらう", key="all_consult"):
+                record_history = all_records_df.to_string(index=False)
+                prompt_to_send = f"""{prompt_full}# 全ての記録
+{record_history}
+
+記録データに即した網羅的な分析レポートを出力してください。
+"""
+
+        with tab3:
+            today = datetime.date.today()
+            one_week_ago = today - datetime.timedelta(days=7)
+            cols = st.columns(2)
+            start_date = cols[0].date_input("開始日", one_week_ago)
+            end_date = cols[1].date_input("終了日", today)
+            if st.button("指定期間のアドバイスをもらう", key="period_consult"):
+                if start_date > end_date:
+                    st.error("終了日は開始日以降に設定してください。")
+                else:
+                    period_records_df = get_records_by_period(start_date, end_date)
+                    if period_records_df.empty:
+                        st.warning("指定された期間に記録がありません。")
+                    else:
+                        record_history = period_records_df.to_string(index=False)
+                        prompt_to_send = f"""{prompt_full}# 記録 ({start_date} ~ {end_date})
+{record_history}
+
+上記の指定期間の記録を評価し、アドバイスをしてください。
+"""
+
+        if prompt_to_send:
+            with st.spinner("AIがアドバイスを生成中です..."):
+                advice = get_advice_from_gemini(prompt_to_send)
+                with st.chat_message("ai", avatar="💬"):
+                    st.markdown(advice)
+        st.markdown('</div>', unsafe_allow_html=True)
