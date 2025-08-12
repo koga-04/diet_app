@@ -230,10 +230,113 @@ def analyze_image_with_gemini(image_bytes):
     ]
 
     image_pil = Image.open(io.BytesIO(image_bytes))
+    prompt = (
+        """
+        あなたは栄養管理の専門家です。この食事の画像を分析してください。
+        食事に含まれる料理名を特定し、全体の総カロリー(kcal)、たんぱく質(g)、炭水化物(g)、脂質(g)、ビタミンD(μg)、食塩相当量(g)、亜鉛(mg)、葉酸(μg)を推定してください。
+        結果は必ず以下のJSON形式で、数値のみを返してください。説明や```json```は不要です。
+        {
+            "foodName": "料理名",
+            "calories": 123.0,
+            "nutrients": {
+                "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
+                "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
+            }
+        }
+        """
+    )
+    last_err = None
+    for model_name in model_candidates:
+        try:
+            model = genai.GenerativeModel(model_name)
+            resp = model.generate_content([prompt, image_pil])
+            txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+            data = json.loads(txt)
+            if isinstance(data, dict) and "nutrients" in data:
+                return data
+        except Exception as e:
+            last_err = e
+            continue
+
+    st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
+    return None
+    return None
+
+# =============================
+# Image-chat helpers (portion / supplement refine)
+# =============================
+
+def _scale_nutrients(nut: dict, factor: float) -> dict:
+    keys = ["calories", "protein", "carbohydrates", "fat", "vitaminD", "salt", "zinc", "folic_acid"]
+    out = {}
+    for k in keys:
+        v = (nut or {}).get(k, 0)
+        try:
+            out[k] = round(float(v) * float(factor), 2)
+        except Exception:
+            out[k] = 0.0
+    return out
+
+
+def _parse_fraction_jp(text: str):
+    """『半分』『3分の1』『1/3』『1.5倍』『30%』などを係数に変換。"""
+    if not text:
+        return None
+    t = str(text).strip()
+    if "半分" in t:
+        return 0.5
+    # 3分の1 など
+    if "分の" in t:
+        try:
+            den, num = t.split("分の")
+            den = float(den.strip()); num = float(num.strip())
+            if den > 0:
+                return num/den
+        except Exception:
+            pass
+    # 1/3 など
+    if "/" in t:
+        try:
+            a, b = t.split("/")
+            a = float(a.strip()); b = float(b.strip())
+            if b != 0:
+                return a/b
+        except Exception:
+            pass
+    # 倍
+    if "倍" in t:
+        try:
+            return float(t.replace("倍", "").strip())
+        except Exception:
+            pass
+    # %
+    if "%" in t:
+        try:
+            return float(t.replace("%", "").strip())/100.0
+        except Exception:
+            pass
+    return None
+
+
+def _refine_by_note(food_name: str, nutrients: dict, note: str):
+    """補足説明を反映して、料理名/栄養値の上書き案を返す。失敗時は None。"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    base_json = json.dumps({"foodName": food_name, "nutrients": nutrients}, ensure_ascii=False)
+    schema = """
+以下のJSONのみを返してください。説明不要。コードフェンス不要。
+{
+  "foodName": "料理名（変更不要ならそのまま）",
+  "nutrients": {
+    "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0,
+    "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0
+  },
+  "note": "補正内容の要約（20字以内）"
+}
+"""
     prompt_parts = [
         "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
-        f"現在の推定: {base_json}
-補足: {note}",
+        "現在の推定: " + base_json + "
+補足: " + (note or ""),
         schema,
     ]
     try:
