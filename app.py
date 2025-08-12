@@ -101,8 +101,8 @@ st.markdown(
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
   /* ===== Sidebar collapse: hide raw text; keep button visible ===== */
-  [data-testid="stSidebarNavCollapseButton"] { text-indent:-9999px !important; white-space:nowrap !important; overflow:hidden !important; width:32px !important; }
-  [data-testid="stSidebarNavCollapseButton"]::after { content:'≡'; text-indent:0; display:inline-block; position:relative; left:0; font-size:18px; color:#6B7280; }
+  [data-testid="stSidebarNavCollapseButton"], [data-testid="stSidebarNavCollapseButton"] * { font-size:0 !important; color:transparent !important; }
+  [data-testid="stSidebarNavCollapseButton"] { width:28px !important; height:28px !important; overflow:hidden !important; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
@@ -280,10 +280,12 @@ def _nl_to_plan(question: str) -> dict:
 """
     try:
         model = genai.GenerativeModel("gemini-1.5-flash-latest")
-        prompt = f"ユーザーの質問:
+        prompt = f"""ユーザーの質問:
 {question}
 
-上の質問を、指定スキーマのJSONに変換してください。{schema}"
+上の質問を、指定スキーマのJSONに変換してください。
+{schema}
+"""
         resp = model.generate_content(prompt)
         txt = resp.text.strip().replace("```json", "").replace("```", "")
         return json.loads(txt)
