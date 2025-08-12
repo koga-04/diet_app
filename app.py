@@ -12,7 +12,7 @@ import io
 # =============================
 st.set_page_config(
     page_title="食生活アドバイザー",
-    page_icon="🍽",
+    page_icon="💧",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -230,163 +230,14 @@ def analyze_image_with_gemini(image_bytes):
     ]
 
     image_pil = Image.open(io.BytesIO(image_bytes))
-    prompt = (
-        """
-        あなたは栄養管理の専門家です。この食事の画像を分析してください。
-        食事に含まれる料理名を特定し、全体の総カロリー(kcal)、たんぱく質(g)、炭水化物(g)、脂質(g)、ビタミンD(μg)、食塩相当量(g)、亜鉛(mg)、葉酸(μg)を推定してください。
-        結果は必ず以下のJSON形式で、数値のみを返してください。説明や```json ```は不要です。
-        {
-            "foodName": "料理名",
-            "calories": 123.0,
-            "nutrients": {
-                "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
-                "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
-            }
-        }
-        """
-    )
-
-    last_err = None
-    for model_name in model_candidates:
-        try:
-            model = genai.GenerativeModel(model_name)
-            resp = model.generate_content([prompt, image_pil])
-            txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
-            data = json.loads(txt)
-            # 期待キーの存在を軽くチェック
-            if not isinstance(data, dict) or "nutrients" not in data:
-                raise ValueError("unexpected response schema")
-            return data
-        except Exception as e:
-            last_err = e
-            continue
-
-    st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
-    return None
-
-
-def get_advice_from_gemini(prompt):
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    try:
-        response = model.generate_content(prompt)
-        return response.text
-    except Exception as e:
-        st.error(f"アドバイス生成中にエラーが発生しました: {e}")
-        return "アドバイスの生成に失敗しました。"
-
-
-# =============================
-# Image-chat helpers (portion & Q&A)
-# =============================
-
-def _scale_nutrients(nut: dict, factor: float) -> dict:
-    keys = ["calories", "protein", "carbohydrates", "fat", "vitaminD", "salt", "zinc", "folic_acid"]
-    out = {}
-    for k in keys:
-        v = (nut or {}).get(k, 0)
-        try:
-            out[k] = round(float(v) * float(factor), 2)
-        except Exception:
-            out[k] = 0.0
-    return out
-
-
-def _parse_fraction_jp(text: str):
-    """『半分』『3分の1』『1/3』『1.5倍』『30%』などを係数に変換（正規表現なしの簡易版）。"""
-    if not text:
-        return None
-    t = str(text).strip()
-    # 半分
-    if "半分" in t:
-        return 0.5
-    # ○分の△
-    if "分の" in t:
-        parts = t.split("分の")
-        if len(parts) == 2:
-            try:
-                den = float(parts[0].strip())
-                num = float(parts[1].strip())
-                if den > 0:
-                    return num / den
-            except Exception:
-                pass
-    # a/b 形式
-    if "/" in t:
-        a_b = t.split("/")
-        if len(a_b) == 2:
-            try:
-                a = float(a_b[0].strip()); b = float(a_b[1].strip())
-                if b != 0:
-                    return a / b
-            except Exception:
-                pass
-    # 倍
-    if "倍" in t:
-        try:
-            return float(t.replace("倍", "").strip())
-        except Exception:
-            pass
-    # %
-    if "%" in t:
-        try:
-            return float(t.replace("%", "").strip()) / 100.0
-        except Exception:
-            pass
-    return None
-
-
-def _answer_about_meal(food_name: str, nutrients: dict, question: str) -> str:
-    """栄養の特色などを簡潔に返す。"""
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    context = f"""
-あなたは管理栄養士です。以下の食品とその推定栄養（1食あたり、食べた量でスケール済み）を踏まえて、ユーザーの質問に簡潔に答えてください。
-- 料理名: {food_name}
-- 栄養: calories={nutrients.get('calories',0)} kcal, protein={nutrients.get('protein',0)} g, carbs={nutrients.get('carbohydrates',0)} g, fat={nutrients.get('fat',0)} g, vitaminD={nutrients.get('vitaminD',0)} μg, salt={nutrients.get('salt',0)} g, zinc={nutrients.get('zinc',0)} mg
-出力ルール:
-- 余計な前置きは不要
-- 2〜4行の箇条書きで要点のみ
-- 不確実な点は推定であることを一言添える
-"""
-    try:
-        resp = model.generate_content([context, "質問: " + question])
-        return resp.text
-    except Exception as e:
-        return f"回答生成に失敗しました: {e}"
-
-# =============================
-# Utils for supplement-driven refinement
-# =============================
-
-def _refine_by_note(food_name: str, nutrients: dict, note: str) -> dict | None:
-    """自然言語の補足を反映して、料理名/栄養値を上書き候補として返す。
-    返り値: {"foodName": str, "nutrients": {...}, "note": str} または None
-    """
-    model = genai.GenerativeModel("gemini-2.5-flash")
-    base_json = json.dumps({"foodName": food_name, "nutrients": nutrients}, ensure_ascii=False)
-    schema = """
-以下のJSONのみを返してください。説明不要。コードフェンス不要。
-{
-  "foodName": "料理名（変更不要ならそのまま）",
-  "nutrients": {
-    "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0,
-    "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0
-  },
-  "note": "補正内容の要約（20字以内）"
-}
-"""
-    prompt = (
-        "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。"
-        "単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。"
-        "可能な範囲で妥当な値に丸めてください（1〜2桁）。
-
-"
+    prompt_parts = [
+        "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
         f"現在の推定: {base_json}
-補足: {note}
-
-" + schema
-    )
+補足: {note}",
+        schema,
+    ]
     try:
-        resp = model.generate_content(prompt)
+        resp = model.generate_content(prompt_parts)
         txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
         data = json.loads(txt)
         if isinstance(data, dict) and data.get("nutrients"):
@@ -985,4 +836,90 @@ if menu == "記録する":
                         plan = _postprocess_plan(q, plan)
                         out_df, summary = _execute_plan(all_records_df, plan)
                     st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
-                    st.wri
+                    st.write(summary)
+                    if not out_df.empty:
+                        st.dataframe(out_df, use_container_width=True)
+                    else:
+                        st.info("該当データがありません。キーワードや期間を変えてみてください。")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# =============================
+# ADVICE
+# =============================
+elif menu == "相談する":
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("AIに相談する")
+
+        all_records_df = get_all_records()
+        if all_records_df.empty:
+            st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
+            st.stop()
+
+        user_profile = (
+            """
+            - 年齢: 35歳女性
+            - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
+            - 希望: アンチエイジング
+            - 苦手な食べ物: 生のトマト、納豆
+            """
+        )
+        prompt_qna = f"""
+あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
+出力ルール:
+- 挨拶・導入・締めの定型文は不要
+- 年齢・性別などの呼称を本文に含めない
+- 回答は必要な要点のみ（最大5項目の箇条書き中心）
+- 記録に基づく引用は最小限の数値のみ
+
+参考情報（出力に含めない）:
+{user_profile}
+"""
+
+        prompt_full = f"""
+あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+出力はMarkdownで、次の構成を必ず含めてください:
+## 概要
+## 良かった点
+## 改善ポイント
+## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
+## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
+## 具体的アクションプラン（食事例3〜5・買い物リスト）
+## 次の7日間の目標
+注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
+
+参考情報（出力に含めない）:
+{user_profile}
+        """
+        prompt_to_send = ""
+
+        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
+
+        with tab1:
+            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
+            if st.button("AIに相談する", key="text_consult"):
+                if question:
+                    record_history = all_records_df.head(30).to_string(index=False)
+                    prompt_to_send = (
+                        f"{prompt_qna}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
+                    )
+                else:
+                    st.warning("相談内容を入力してください。")
+
+        with tab2:
+            st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
+            if st.button("アドバイスをもらう", key="all_consult"):
+                record_history = all_records_df.to_string(index=False)
+                prompt_to_send = f"""{prompt_full}# 全ての記録
+{record_history}
+
+記録データに即した網羅的な分析レポートを出力してください。
+"""
+
+        if prompt_to_send:
+            with st.spinner("AIがアドバイスを生成中です..."):
+                advice = get_advice_from_gemini(prompt_to_send)
+                with st.chat_message("ai", avatar="💬"):
+                    st.markdown(advice)
+
+        st.markdown('</div>', unsafe_allow_html=True)
