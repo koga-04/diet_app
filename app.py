@@ -61,10 +61,19 @@ st.markdown(
   .danger>button { background: var(--warn) !important; }
   .danger>button:hover { background: #DC2626 !important; }
 
-  /* Inputs (rounded corners + clean focus ring; remove dark corners) */
-  .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div { border-radius: 12px !important; overflow: hidden; }
-  .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div { background: #FFFFFF !important; border: 1px solid var(--border) !important; border-radius: 12px !important; box-shadow: none !important; color: var(--text) !important; }
-  .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox>div>div:focus { outline: none !important; border-color: var(--primary) !important; box-shadow: 0 0 0 4px rgba(59,130,246,.15) !important; }
+  /* Inputs (clean corners: no dark caps; unify look) */
+  .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div { background:#FFFFFF !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:none !important; }
+  .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div { background:#FFFFFF !important; border:none !important; border-radius:12px !important; box-shadow:none !important; color: var(--text) !important; }
+  .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox>div>div:focus { outline:none !important; border:none !important; box-shadow:0 0 0 4px rgba(59,130,246,.15) !important; }
+
+  /* NumberInput stepper (make + / - visible & light) */
+  .stNumberInput button, .stNumberInput [role="button"] { background: transparent !important; color: var(--text) !important; border: none !important; box-shadow:none !important; }
+  .stNumberInput button:hover { background:#F3F4F6 !important; }
+  .stNumberInput svg { fill: currentColor !important; color: var(--text) !important; }
+  .stNumberInput>div>div { background: transparent !important; box-shadow:none !important; }
+
+  /* DateInput icon */
+  .stDateInput svg { color: var(--muted) !important; fill: currentColor !important; }
 
   /* Tabs */
   .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
@@ -74,10 +83,12 @@ st.markdown(
   /* Sidebar */
   [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--border); }
 
-  /* Datepicker / Popover (force light theme) */
+  /* Datepicker / Popover (force full light theme) */
   [data-baseweb="popover"] { background: #FFFFFF !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-  [data-baseweb="popover"] * { color: var(--text) !important; }
+  [data-baseweb="popover"] * { background:#FFFFFF !important; color: var(--text) !important; }
   [role="dialog"], [data-baseweb="datepicker"], [data-baseweb="calendar"] { background: #FFFFFF !important; color: var(--text) !important; }
+  /* weekday header & month bar */
+  [data-baseweb="calendar"] [role="row"] [role="columnheader"] { color: #374151 !important; font-weight: 600; }
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
