@@ -50,31 +50,23 @@ st.markdown(
   /* ===== Card ===== */
   .card { background: var(--panel); border-radius: 16px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 8px 28px rgba(17,24,39,0.06); margin-bottom: 18px; }
 
-  /* ===== Buttons (simple) ===== */
+  /* ===== Buttons ===== */
   .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; box-shadow:none !important; }
   .stButton>button:hover { background: var(--primary-600) !important; }
   .stButton>button:active { transform: none; }
 
-  /* ===== Inputs: make all identical to Selectbox ===== */
-  /* Outer wrapper provides border & radius */
+  /* ===== Inputs: identical to Selectbox (flat) ===== */
   .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div {
     background:#FFFFFF !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:none !important; overflow:hidden !important;
   }
-  /* Inner input areas are flat */
   .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div {
     background:#FFFFFF !important; border:none !important; border-radius:0 !important; box-shadow:none !important; color: var(--text) !important;
   }
-  /* Remove any dark corners/shadows from nested elements */
-  .stDateInput>div>div, .stDateInput>div>div * { box-shadow:none !important; }
-  .stDateInput *::before, .stDateInput *::after { box-shadow:none !important; background:transparent !important; }
-  /* Match height/padding with Selectbox */
-  .stDateInput>div, .stTextInput>div, .stNumberInput>div, .stSelectbox>div { min-height:44px; }
+  .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within { border-color: var(--primary) !important; box-shadow:none !important; }
+
+  /* >>> DateInput: force all inner slots to white (remove dark end-cap) */
+  .stDateInput>div>div, .stDateInput>div>div * { background:#FFFFFF !important; border:none !important; box-shadow:none !important; }
   .stDateInput input { height:42px !important; padding:0 12px !important; }
-  .stTextInput input, .stNumberInput input { padding: 10px 12px !important; }
-  /* Focus: border color only */
-  .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within {
-    border-color: var(--primary) !important; box-shadow:none !important;
-  }
 
   /* NumberInput steppers: readable */
   .stNumberInput [data-baseweb="button"], .stNumberInput [data-baseweb="button"] * { background: transparent !important; color: #374151 !important; fill: #374151 !important; border:none !important; }
@@ -92,7 +84,6 @@ st.markdown(
   [data-baseweb="popover"] { background: #FFFFFF !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
   [data-baseweb="popover"] * { background:#FFFFFF !important; color: var(--text) !important; }
   [role="dialog"], [data-baseweb="datepicker"], [data-baseweb="calendar"] { background: #FFFFFF !important; color: var(--text) !important; }
-  /* Header rows (month / weekday) */
   [data-baseweb="calendar"] [role="row"] [role="columnheader"],
   [data-baseweb="calendar"] [role="heading"],
   [data-baseweb="datepicker"] [class*="header"],
@@ -100,8 +91,10 @@ st.markdown(
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
-  /* ===== Hide keyboard shortcut / stray icons in header ===== */
-  [data-testid="stToolbar"], [data-testid="stHeader"], [aria-label*="Keyboard"], [title*="Keyboard"], [class*="keyboard_double"], [data-testid="stSidebarNavCollapseButton"] { display:none !important; }
+  /* ===== Sidebar collapse: hide fallback text only (keep button visible) ===== */
+  [data-testid="stSidebarNavCollapseButton"] span { font-size:0 !important; line-height:0 !important; }
+  [data-testid="stSidebarNavCollapseButton"] { position:relative; }
+  [data-testid="stSidebarNavCollapseButton"]::after { content:'☰'; font-size:18px; color:#6B7280; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
