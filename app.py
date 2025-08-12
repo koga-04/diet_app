@@ -22,6 +22,7 @@ st.markdown(
     """
     <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@400');
 
   :root {
     --bg: #F7FAFC;
@@ -41,6 +42,14 @@ st.markdown(
     color: var(--text);
   }
   .stApp { background: var(--bg); }
+
+  /* Ensure material icon font renders glyphs instead of raw text */
+  [class^="material-icons"], [class*=" material-icons"],
+  [class^="material-symbols"], [class*=" material-symbols"] {
+    font-family: 'Material Symbols Outlined' !important;
+    font-weight: 400; font-style: normal;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
 
   /* ===== Hero ===== */
   .hero { background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10)); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; margin: 8px 0 18px 0; }
@@ -64,9 +73,8 @@ st.markdown(
   }
   .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within { border-color: var(--primary) !important; box-shadow:none !important; }
 
-  /* >>> DateInput: remove dark end-cap/any borders from inner enhancers */
+  /* >>> DateInput: remove any dark end-cap/inner enhancers */
   .stDateInput * { background:#FFFFFF !important; border-color: var(--border) !important; box-shadow:none !important; }
-  .stDateInput [class*="Enhancer"], .stDateInput [class*="enhancer"], .stDateInput [data-baseweb="icon"], .stDateInput svg { background:#FFFFFF !important; color:#6B7280 !important; fill:currentColor !important; }
   .stDateInput input { height:42px !important; padding:0 12px !important; }
 
   /* NumberInput steppers: readable */
@@ -92,10 +100,9 @@ st.markdown(
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
-  /* ===== Sidebar collapse: hide text only; keep button, show hamburger ===== */
-  [data-testid="stSidebarNavCollapseButton"], [data-testid="stSidebarNavCollapseButton"] * { font-size:0 !important; color:transparent !important; }
-  [data-testid="stSidebarNavCollapseButton"] { position:relative; }
-  [data-testid="stSidebarNavCollapseButton"]::after { content:'≡'; font-size:18px; color:#6B7280; }
+  /* ===== Sidebar collapse: hide raw text; keep button visible ===== */
+  [data-testid="stSidebarNavCollapseButton"] { text-indent:-9999px !important; white-space:nowrap !important; overflow:hidden !important; width:32px !important; }
+  [data-testid="stSidebarNavCollapseButton"]::after { content:'≡'; text-indent:0; display:inline-block; position:relative; left:0; font-size:18px; color:#6B7280; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
@@ -256,33 +263,21 @@ def get_advice_from_gemini(prompt):
 
 def _nl_to_plan(question: str) -> dict:
     """Geminiで自然文→クエリJSONに変換。失敗時は空dictを返す。"""
-    schema = (
-        "以下のJSONだけを返してください。説明不要。```は付けない。
-"
-        "{
-"
-        "  \"action\": \"aggregate|filter|trend|top_n\",
-"
-        "  \"date_range\": {\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"} | null,
-"
-        "  \"meal_types\": [\"朝食|昼食|夕食|間食|サプリ|水分補給\"] | [],
-"
-        "  \"name_contains\": \"任意のキーワード\" | null,
-"
-        "  \"metrics\": [\"calories|protein|carbohydrates|fat|vitamin_d|salt|zinc|folic_acid\"],
-"
-        "  \"agg\": \"sum|avg|count\" | null,
-"
-        "  \"group_by\": \"date|meal_type\" | null,
-"
-        "  \"top_n\": 整数 | null,
-"
-        "  \"sort_by\": 指標名 | null,
-"
-        "  \"sort_order\": \"desc|asc\" | null
-"
-        "}"
-    )
+    schema = """
+以下のJSONだけを返してください。説明不要。```は付けない。
+{
+  "action": "aggregate|filter|trend|top_n",
+  "date_range": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} | null,
+  "meal_types": ["朝食","昼食","夕食","間食","サプリ","水分補給"] | [],
+  "name_contains": "任意のキーワード" | null,
+  "metrics": ["calories","protein","carbohydrates","fat","vitamin_d","salt","zinc","folic_acid"],
+  "agg": "sum|avg|count" | null,
+  "group_by": "date|meal_type" | null,
+  "top_n": 整数 | null,
+  "sort_by": 指標名 | null,
+  "sort_order": "desc|asc" | null
+}
+"""
     try:
         model = genai.GenerativeModel("gemini-1.5-flash-latest")
         prompt = f"ユーザーの質問:
@@ -696,25 +691,18 @@ elif menu == "相談する":
             - 苦手な食べ物: 生のトマト、納豆
             """
         )
-        base_prompt = (
-            "あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
-"
-            "出力ルール:
-"
-            "- 挨拶・導入・締めの定型文は不要
-"
-            "- 年齢・性別などの呼称を本文に含めない
-"
-            "- 回答は必要な要点のみ（最大5項目の箇条書き中心）
-"
-            "- 記録に基づく引用は最小限の数値のみ
+        base_prompt = f"""
+あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
+出力ルール:
+- 挨拶・導入・締めの定型文は不要
+- 年齢・性別などの呼称を本文に含めない
+- 回答は必要な要点のみ（最大5項目の箇条書き中心）
+- 記録に基づく引用は最小限の数値のみ
 
-"
-            "参考情報（出力に含めない）:
-" + user_profile + "
-"
-        )
-        prompt_to_send = ""
+参考情報（出力に含めない）:
+{user_profile}
+"""
+prompt_to_send = ""
 
         tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
 
