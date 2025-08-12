@@ -230,15 +230,8 @@ def get_advice_from_gemini(prompt: str) -> str:
         return "アドバイスの生成に失敗しました。"
 
 def analyze_image_with_gemini(image_bytes):
-    """画像を解析し、{ foodName, calories, nutrients{...} } を返す。
-    まず gemini-2.5-flash を試し、ダメなら 1.5 系にフォールバック。
-    """
-    model_candidates = [
-        "gemini-2.5-flash",  # マルチモーダル対応（利用可なら最優先）
-        "gemini-1.5-flash",  # 旧来の高速・画像対応
-        "gemini-1.5-pro",    # 高精度・画像対応
-    ]
-
+    """画像を解析し、{ foodName, calories, nutrients{...} } を返す。"""
+    model_candidates = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
     image_pil = Image.open(io.BytesIO(image_bytes))
     prompt = (
         """
@@ -267,9 +260,41 @@ def analyze_image_with_gemini(image_bytes):
         except Exception as e:
             last_err = e
             continue
-
     st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
     return None
+
+# ★改修要望2: フリーテキストから栄養素を推定する新機能
+def analyze_text_with_gemini(description: str):
+    """フリーテキストを解析し、{ foodName, calories, nutrients{...} } を返す。"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    prompt = (
+        f"""
+        あなたは栄養管理の専門家です。以下の食事内容の記述を分析してください。
+        食事に含まれる料理名を特定し、全体の総カロリー(kcal)、たんぱく質(g)、炭水化物(g)、脂質(g)、ビタミンD(μg)、食塩相当量(g)、亜鉛(mg)、葉酸(μg)を推定してください。
+        結果は必ず以下のJSON形式で、数値のみを返してください。説明や```json```は不要です。
+
+        食事内容: "{description}"
+
+        {{
+            "foodName": "（推定した食事名、例：飲み会での食事）",
+            "calories": 123.0,
+            "nutrients": {{
+                "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
+                "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
+            }}
+        }}
+        """
+    )
+    try:
+        resp = model.generate_content(prompt)
+        txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+        data = json.loads(txt)
+        if isinstance(data, dict) and "nutrients" in data:
+            return data
+    except Exception as e:
+        st.error(f"テキスト分析中にエラーが発生しました: {e}")
+    return None
+
 
 # =============================
 # Image-chat helpers (portion / supplement refine)
@@ -610,74 +635,33 @@ if menu == "記録する":
         # type + date
         left, right = st.columns([1, 1])
         with left:
+            # ★改修要望1: 「プロテイン」を追加
             meal_type = st.selectbox(
                 "記録の種類",
-                ["朝食", "昼食", "夕食", "間食", "サプリ", "水分補給"],
+                ["朝食", "昼食", "夕食", "間食", "プロテイン", "サプリ", "水分補給"],
                 index=0,
             )
         with right:
             record_date = st.date_input("日付", datetime.date.today())
+        
+        # ---- プロテイン ----
+        # ★改修要望1: 「プロテイン」用の入力フォームを新設
+        if meal_type == "プロテイン":
+            with st.form(key="protein_form", clear_on_submit=True):
+                protein_amount = st.number_input("たんぱく質の量 (g)", min_value=0.0, step=0.1, value=20.0, format="%.1f")
+                if st.form_submit_button("プロテインを記録する", use_container_width=True):
+                    nutrients = { "protein": protein_amount, "calories": protein_amount * 4 } # カロリーはたんぱく質1g=4kcalで簡易計算
+                    add_record(record_date, "プロテイン", f"プロテイン {protein_amount}g", nutrients)
+                    st.success(f"プロテイン {protein_amount}g を記録しました！")
 
         # ---- サプリ ----
-        if meal_type == "サプリ":
+        elif meal_type == "サプリ":
             with st.form(key="supplement_form", clear_on_submit=True):
                 supplements = {
-                    "マルチビタミン": {
-                        "displayName": "マルチビタミン",
-                        "foodName": "サプリ: スーパーマルチビタミン&ミネラル",
-                        "nutrients": {
-                            "calories": 5,
-                            "protein": 0.02,
-                            "carbohydrates": 0.6,
-                            "fat": 0.05,
-                            "vitaminD": 10.0,
-                            "salt": 0,
-                            "zinc": 6.0,
-                            "folic_acid": 240,
-                        },
-                    },
-                    "葉酸": {
-                        "displayName": "葉酸",
-                        "foodName": "サプリ: 葉酸",
-                        "nutrients": {
-                            "calories": 1,
-                            "protein": 0,
-                            "carbohydrates": 0.23,
-                            "fat": 0.004,
-                            "vitaminD": 0,
-                            "salt": 0,
-                            "zinc": 0,
-                            "folic_acid": 480,
-                        },
-                    },
-                    "ビタミンD": {
-                        "displayName": "ビタミンD",
-                        "foodName": "サプリ: ビタミンD",
-                        "nutrients": {
-                            "calories": 1,
-                            "protein": 0,
-                            "carbohydrates": 0,
-                            "fat": 0.12,
-                            "vitaminD": 30.0,
-                            "salt": 0,
-                            "zinc": 0,
-                            "folic_acid": 0,
-                        },
-                    },
-                    "亜鉛": {
-                        "displayName": "亜鉛",
-                        "foodName": "サプリ: 亜鉛",
-                        "nutrients": {
-                            "calories": 1,
-                            "protein": 0,
-                            "carbohydrates": 0.17,
-                            "fat": 0.005,
-                            "vitaminD": 0,
-                            "salt": 0,
-                            "zinc": 14.0,
-                            "folic_acid": 0,
-                        },
-                    },
+                    "マルチビタミン": { "displayName": "マルチビタミン", "foodName": "サプリ: スーパーマルチビタミン&ミネラル", "nutrients": { "calories": 5, "protein": 0.02, "carbohydrates": 0.6, "fat": 0.05, "vitaminD": 10.0, "salt": 0, "zinc": 6.0, "folic_acid": 240, }, },
+                    "葉酸": { "displayName": "葉酸", "foodName": "サプリ: 葉酸", "nutrients": { "calories": 1, "protein": 0, "carbohydrates": 0.23, "fat": 0.004, "vitaminD": 0, "salt": 0, "zinc": 0, "folic_acid": 480, }, },
+                    "ビタミンD": { "displayName": "ビタミンD", "foodName": "サプリ: ビタミンD", "nutrients": { "calories": 1, "protein": 0, "carbohydrates": 0, "fat": 0.12, "vitaminD": 30.0, "salt": 0, "zinc": 0, "folic_acid": 0, }, },
+                    "亜鉛": { "displayName": "亜鉛", "foodName": "サプリ: 亜鉛", "nutrients": { "calories": 1, "protein": 0, "carbohydrates": 0.17, "fat": 0.005, "vitaminD": 0, "salt": 0, "zinc": 14.0, "folic_acid": 0, }, },
                 }
                 selected_sup = st.selectbox("サプリを選択", list(supplements.keys()))
                 if st.form_submit_button("サプリを記録する", use_container_width=True):
@@ -690,25 +674,17 @@ if menu == "記録する":
             with st.form(key="water_form", clear_on_submit=True):
                 amount_ml = st.number_input("飲んだ量 (ml)", min_value=0, step=50, value=200)
                 if st.form_submit_button("水分補給を記録する", use_container_width=True):
-                    nutrients = {
-                        "calories": 0,
-                        "protein": 0,
-                        "carbohydrates": 0,
-                        "fat": 0,
-                        "vitaminD": 0,  # \n
-                        "salt": 0,
-                        "zinc": 0,
-                        "folic_acid": 0,
-                    }
+                    nutrients = { "calories": 0, "protein": 0, "carbohydrates": 0, "fat": 0, "vitaminD": 0, "salt": 0, "zinc": 0, "folic_acid": 0, }
                     add_record(record_date, "水分補給", f"{amount_ml} ml", nutrients)
                     st.success(f"水分補給 {amount_ml}ml を記録しました！")
 
         # ---- 食事 ----
         else:
-            input_method = st.radio("記録方法", ["テキスト入力", "画像から入力"], horizontal=True)
+            # ★改修要望2: 入力方法を3パターンに変更
+            input_method = st.radio("記録方法", ["栄養素手入力", "フリー記述入力", "画像から入力"], horizontal=True)
 
             # manual
-            if input_method == "テキスト入力":
+            if input_method == "栄養素手入力":
                 with st.form(key="text_input_form", clear_on_submit=True):
                     food_name = st.text_input("食事名", placeholder="例）鮭の塩焼き定食 など")
                     cols = st.columns(2)
@@ -722,18 +698,25 @@ if menu == "記録する":
 
                     if st.form_submit_button("食事を記録する", use_container_width=True, type="primary"):
                         if food_name:
-                            nutrients = {
-                                "calories": calories,
-                                "protein": protein,
-                                "carbohydrates": carbohydrates,
-                                "fat": fat,
-                                "vitaminD": vitamin_d,
-                                "salt": salt,
-                                "zinc": zinc,                            }
+                            nutrients = { "calories": calories, "protein": protein, "carbohydrates": carbohydrates, "fat": fat, "vitaminD": vitamin_d, "salt": salt, "zinc": zinc, }
                             add_record(record_date, meal_type, food_name, nutrients)
                             st.success(f"{food_name}を記録しました！")
                         else:
                             st.warning("食事名を入力してください。")
+            
+            # ★改修要望2: フリー記述入力のUIを新設
+            elif input_method == "フリー記述入力":
+                description = st.text_area("食事の内容を自由に入力してください", placeholder="例：飲み会で、焼き鳥を5本（タレ）、ビールを2杯、枝豆を食べた")
+                if st.button("AIで栄養素を推定する", use_container_width=True):
+                    if description.strip():
+                        with st.spinner("AIが記述内容を分析中です..."):
+                            analysis_result = analyze_text_with_gemini(description)
+                        if analysis_result:
+                            st.session_state.analysis_result = analysis_result
+                        else:
+                            st.error("分析に失敗しました。もう少し具体的に記述してください。")
+                    else:
+                        st.warning("食事の内容を入力してください。")
 
             # image
             elif input_method == "画像から入力":
@@ -747,122 +730,114 @@ if menu == "記録する":
                             st.session_state.analysis_result = analysis_result
                         else:
                             st.error("分析に失敗しました。テキストで入力してください。")
+            
+            # ★改修要望2: 画像入力とフリー記述入力の共通確認フォーム
+            if input_method in ["フリー記述入力", "画像から入力"] and "analysis_result" in st.session_state:
+                st.info("AIの推定値を確認し、必要に応じて量を調整してから記録してください。")
+                result = st.session_state.analysis_result
+                base_food = result.get("foodName", "")
+                base_nut = result.get("nutrients", {})
+                base_pack = {"calories": float(result.get("calories", 0) or 0.0), **base_nut}
 
-                if "analysis_result" in st.session_state:
-                    st.info("AIの推定値を確認し、必要に応じて量を調整してから記録してください。")
-                    result = st.session_state.analysis_result
-                    base_food = result.get("foodName", "")
-                    base_nut = result.get("nutrients", {})
-                    base_pack = {"calories": float(result.get("calories", 0) or 0.0), **base_nut}
+                if "serve_factor" not in st.session_state:
+                    st.session_state.serve_factor = 1.0
 
-                    if "serve_factor" not in st.session_state:
-                        st.session_state.serve_factor = 1.0
-
-                    fc1, fc2 = st.columns([2, 1])
-                    with fc2:
-                        st.caption("食べた量（係数）")
-                        bcols = st.columns(7)
-                        if bcols[0].button("1/4"): st.session_state.serve_factor = 0.25
-                        if bcols[1].button("1/3"): st.session_state.serve_factor = 1/3
-                        if bcols[2].button("1/2"): st.session_state.serve_factor = 0.5
-                        if bcols[3].button("2/3"): st.session_state.serve_factor = 2/3
-                        if bcols[4].button("1x"):  st.session_state.serve_factor = 1.0
-                        if bcols[5].button("1.5x"): st.session_state.serve_factor = 1.5
-                        if bcols[6].button("2x"):  st.session_state.serve_factor = 2.0
-                        st.session_state.serve_factor = st.slider("係数", 0.1, 2.0, float(st.session_state.serve_factor), 0.05)
-                        instr = st.text_input("自然言語で量を指定（例：半分、3分の1、1.5倍、30%）", key="serve_text")
-                        if st.button("反映", key="serve_apply") and instr.strip():
-                            f = _parse_fraction_jp(instr)
-                            if f is not None:
-                                st.session_state.serve_factor = float(f)
-                                st.success(f"係数 {f} を反映しました。")
-                            else:
-                                st.warning("係数を解釈できませんでした。")
-
-                    factor = float(st.session_state.serve_factor)
-                    scaled = _scale_nutrients(base_pack, factor)
-                    effective = st.session_state.get("supp_nutrients", scaled) if st.session_state.get("supp_adopted") else scaled
-
-                    with fc1:
-                        st.caption("プレビュー（現在の反映値）")
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("カロリー", f"{effective['calories']:.0f} kcal")
-                        m2.metric("たんぱく質", f"{effective['protein']:.1f} g")
-                        m3.metric("炭水化物", f"{effective['carbohydrates']:.1f} g")
-                        m4.metric("脂質", f"{effective['fat']:.1f} g")
-
-                    st.divider()
-                    st.caption("この料理についての補足説明（任意）")
-                    note = st.text_area("補足を入力", key="meal_note", placeholder="例：豚肉は70gくらい、味噌汁は具少なめ など")
-
-                    # 現在の反映値をベースに補足を適用
-                    current_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
-                    current_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
-
-                    if st.button("補足を解析して反映案を作る", key="apply_note_btn"):
-                        with st.spinner("補足を解析中..."):
-                            cand = _refine_by_note(current_food or "料理", current_pack, note or "")
-                        if cand and "nutrients" in cand:
-                            st.session_state.supp_candidate = cand
-                            st.success("反映案を作成しました。下の比較を確認してください。")
+                fc1, fc2 = st.columns([2, 1])
+                with fc2:
+                    st.caption("食べた量（係数）")
+                    bcols = st.columns(7)
+                    if bcols[0].button("1/4"): st.session_state.serve_factor = 0.25
+                    if bcols[1].button("1/3"): st.session_state.serve_factor = 1/3
+                    if bcols[2].button("1/2"): st.session_state.serve_factor = 0.5
+                    if bcols[3].button("2/3"): st.session_state.serve_factor = 2/3
+                    if bcols[4].button("1x"):  st.session_state.serve_factor = 1.0
+                    if bcols[5].button("1.5x"): st.session_state.serve_factor = 1.5
+                    if bcols[6].button("2x"):  st.session_state.serve_factor = 2.0
+                    st.session_state.serve_factor = st.slider("係数", 0.1, 2.0, float(st.session_state.serve_factor), 0.05)
+                    instr = st.text_input("自然言語で量を指定（例：半分、3分の1、1.5倍、30%）", key="serve_text")
+                    if st.button("反映", key="serve_apply") and instr.strip():
+                        f = _parse_fraction_jp(instr)
+                        if f is not None:
+                            st.session_state.serve_factor = float(f)
+                            st.success(f"係数 {f} を反映しました。")
                         else:
-                            st.warning("補足の解釈に失敗しました。もう少し具体的に書いてください。")
+                            st.warning("係数を解釈できませんでした。")
 
-                    if "supp_candidate" in st.session_state:
-                        cand = st.session_state.supp_candidate
-                        cand_food = cand.get("foodName") or current_food
-                        cand_pack = cand.get("nutrients") or current_pack
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.caption("現在の値")
-                            st.dataframe(pd.DataFrame([current_pack]))
-                        with c2:
-                            st.caption("反映案")
-                            st.dataframe(pd.DataFrame([cand_pack]))
-                        a1, a2 = st.columns(2)
-                        if a1.button("この変更を採用", key="accept_note"):
-                            st.session_state.supp_food_name = cand_food
-                            st.session_state.supp_nutrients = cand_pack
-                            st.session_state.supp_adopted = True
-                            del st.session_state.supp_candidate
-                            st.success("補足を反映しました。さらに追記して微調整もできます。")
+                factor = float(st.session_state.serve_factor)
+                scaled = _scale_nutrients(base_pack, factor)
+                effective = st.session_state.get("supp_nutrients", scaled) if st.session_state.get("supp_adopted") else scaled
+
+                with fc1:
+                    st.caption("プレビュー（現在の反映値）")
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("カロリー", f"{effective['calories']:.0f} kcal")
+                    m2.metric("たんぱく質", f"{effective['protein']:.1f} g")
+                    m3.metric("炭水化物", f"{effective['carbohydrates']:.1f} g")
+                    m4.metric("脂質", f"{effective['fat']:.1f} g")
+
+                st.divider()
+                st.caption("この料理についての補足説明（任意）")
+                note = st.text_area("補足を入力", key="meal_note", placeholder="例：豚肉は70gくらい、味噌汁は具少なめ など")
+
+                current_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
+                current_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
+
+                if st.button("補足を解析して反映案を作る", key="apply_note_btn"):
+                    with st.spinner("補足を解析中..."):
+                        cand = _refine_by_note(current_food or "料理", current_pack, note or "")
+                    if cand and "nutrients" in cand:
+                        st.session_state.supp_candidate = cand
+                        st.success("反映案を作成しました。下の比較を確認してください。")
+                    else:
+                        st.warning("補足の解釈に失敗しました。もう少し具体的に書いてください。")
+
+                if "supp_candidate" in st.session_state:
+                    cand = st.session_state.supp_candidate
+                    cand_food = cand.get("foodName") or current_food
+                    cand_pack = cand.get("nutrients") or current_pack
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.caption("現在の値")
+                        st.dataframe(pd.DataFrame([current_pack]))
+                    with c2:
+                        st.caption("反映案")
+                        st.dataframe(pd.DataFrame([cand_pack]))
+                    a1, a2 = st.columns(2)
+                    if a1.button("この変更を採用", key="accept_note"):
+                        st.session_state.supp_food_name = cand_food
+                        st.session_state.supp_nutrients = cand_pack
+                        st.session_state.supp_adopted = True
+                        del st.session_state.supp_candidate
+                        st.success("補足を反映しました。さらに追記して微調整もできます。")
+                        st.rerun()
+                    if a2.button("反映案を破棄", key="discard_note"):
+                        del st.session_state.supp_candidate
+                        st.info("反映案を破棄しました。")
+
+                final_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
+                final_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
+
+                with st.form(key="image_confirm_form"):
+                    food_name = st.text_input("食事名", value=final_food)
+                    cols = st.columns(2)
+                    calories = cols[0].number_input("カロリー (kcal)", value=float(final_pack.get("calories", 0.0)), format="%.1f")
+                    protein = cols[1].number_input("たんぱく質 (g)", value=float(final_pack.get("protein", 0.0)), format="%.1f")
+                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(final_pack.get("carbohydrates", 0.0)), format="%.1f")
+                    fat = cols[1].number_input("脂質 (g)", value=float(final_pack.get("fat", 0.0)), format="%.1f")
+                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(final_pack.get("vitaminD", 0.0)), format="%.1f")
+                    salt = cols[1].number_input("食塩相当量 (g)", value=float(final_pack.get("salt", 0.0)), format="%.1f")
+                    zinc = cols[0].number_input("亜鉛 (mg)", value=float(final_pack.get("zinc", 0.0)), format="%.1f")
+
+                    if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
+                        if food_name:
+                            nutrients = { "calories": calories, "protein": protein, "carbohydrates": carbohydrates, "fat": fat, "vitaminD": vitamin_d, "salt": salt, "zinc": zinc, }
+                            add_record(record_date, meal_type, food_name, nutrients)
+                            st.success(f"{food_name}を記録しました！")
+                            for key in ["analysis_result", "serve_factor", "supp_candidate", "supp_food_name", "supp_nutrients", "supp_adopted"]:
+                                st.session_state.pop(key, None)
                             st.rerun()
-                        if a2.button("反映案を破棄", key="discard_note"):
-                            del st.session_state.supp_candidate
-                            st.info("反映案を破棄しました。")
-
-                    # 最終的にフォームへ渡す値
-                    final_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
-                    final_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
-
-                    with st.form(key="image_confirm_form"):
-                        food_name = st.text_input("食事名", value=final_food)
-                        cols = st.columns(2)
-                        calories = cols[0].number_input("カロリー (kcal)", value=float(final_pack.get("calories", 0.0)), format="%.1f")
-                        protein = cols[1].number_input("たんぱく質 (g)", value=float(final_pack.get("protein", 0.0)), format="%.1f")
-                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(final_pack.get("carbohydrates", 0.0)), format="%.1f")
-                        fat = cols[1].number_input("脂質 (g)", value=float(final_pack.get("fat", 0.0)), format="%.1f")
-                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(final_pack.get("vitaminD", 0.0)), format="%.1f")
-                        salt = cols[1].number_input("食塩相当量 (g)", value=float(final_pack.get("salt", 0.0)), format="%.1f")
-                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(final_pack.get("zinc", 0.0)), format="%.1f")
-
-                        if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
-                            if food_name:
-                                nutrients = {
-                                    "calories": calories,
-                                    "protein": protein,
-                                    "carbohydrates": carbohydrates,
-                                    "fat": fat,
-                                    "vitaminD": vitamin_d,
-                                    "salt": salt,
-                                    "zinc": zinc,                                }
-                                add_record(record_date, meal_type, food_name, nutrients)
-                                st.success(f"{food_name}を記録しました！")
-                                del st.session_state.analysis_result
-                                st.session_state.pop("serve_factor", None)
-                                st.rerun()
-                            else:
-                                st.warning("食事名を入力してください。")
+                        else:
+                            st.warning("食事名を入力してください。")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ---- List ----
@@ -876,15 +851,8 @@ if menu == "記録する":
             display_df = all_records_df.copy()
             display_df["削除"] = [False] * len(display_df)
 
-            def fmt_meal_chip(meal):
-                if meal == "水分補給":
-                    return '<span class="chip water">水分補給</span>'
-                if meal == "サプリ":
-                    return '<span class="chip sup">サプリ</span>'
-                return f'<span class="chip meal">{meal}</span>'
-
             def format_calories(row):
-                if row["meal_type"] in ["水分補給", "サプリ"]:
+                if row["meal_type"] in ["水分補給", "サプリ", "プロテイン"]:
                     return "ー"
                 return f"{int(row['calories'])} kcal" if pd.notna(row["calories"]) else "ー"
 
@@ -1059,5 +1027,3 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
-
-
