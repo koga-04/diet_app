@@ -64,8 +64,9 @@ st.markdown(
   }
   .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within { border-color: var(--primary) !important; box-shadow:none !important; }
 
-  /* >>> DateInput: force all inner slots to white (remove dark end-cap) */
-  .stDateInput>div>div, .stDateInput>div>div * { background:#FFFFFF !important; border:none !important; box-shadow:none !important; }
+  /* >>> DateInput: remove dark end-cap/any borders from inner enhancers */
+  .stDateInput * { background:#FFFFFF !important; border-color: var(--border) !important; box-shadow:none !important; }
+  .stDateInput [class*="Enhancer"], .stDateInput [class*="enhancer"], .stDateInput [data-baseweb="icon"], .stDateInput svg { background:#FFFFFF !important; color:#6B7280 !important; fill:currentColor !important; }
   .stDateInput input { height:42px !important; padding:0 12px !important; }
 
   /* NumberInput steppers: readable */
@@ -91,10 +92,10 @@ st.markdown(
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
-  /* ===== Sidebar collapse: hide fallback text only (keep button visible) ===== */
-  [data-testid="stSidebarNavCollapseButton"] span { font-size:0 !important; line-height:0 !important; }
+  /* ===== Sidebar collapse: hide text only; keep button, show hamburger ===== */
+  [data-testid="stSidebarNavCollapseButton"], [data-testid="stSidebarNavCollapseButton"] * { font-size:0 !important; color:transparent !important; }
   [data-testid="stSidebarNavCollapseButton"] { position:relative; }
-  [data-testid="stSidebarNavCollapseButton"]::after { content:'☰'; font-size:18px; color:#6B7280; }
+  [data-testid="stSidebarNavCollapseButton"]::after { content:'≡'; font-size:18px; color:#6B7280; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
@@ -248,6 +249,121 @@ def get_advice_from_gemini(prompt):
         st.error(f"アドバイス生成中にエラーが発生しました: {e}")
         return "アドバイスの生成に失敗しました。"
 
+
+# =============================
+# Utils: NL → DataFrame query planner
+# =============================
+
+def _nl_to_plan(question: str) -> dict:
+    """Geminiで自然文→クエリJSONに変換。失敗時は空dictを返す。"""
+    schema = (
+        "以下のJSONだけを返してください。説明不要。```は付けない。
+"
+        "{
+"
+        "  \"action\": \"aggregate|filter|trend|top_n\",
+"
+        "  \"date_range\": {\"start\": \"YYYY-MM-DD\", \"end\": \"YYYY-MM-DD\"} | null,
+"
+        "  \"meal_types\": [\"朝食|昼食|夕食|間食|サプリ|水分補給\"] | [],
+"
+        "  \"name_contains\": \"任意のキーワード\" | null,
+"
+        "  \"metrics\": [\"calories|protein|carbohydrates|fat|vitamin_d|salt|zinc|folic_acid\"],
+"
+        "  \"agg\": \"sum|avg|count\" | null,
+"
+        "  \"group_by\": \"date|meal_type\" | null,
+"
+        "  \"top_n\": 整数 | null,
+"
+        "  \"sort_by\": 指標名 | null,
+"
+        "  \"sort_order\": \"desc|asc\" | null
+"
+        "}"
+    )
+    try:
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        prompt = f"ユーザーの質問:
+{question}
+
+上の質問を、指定スキーマのJSONに変換してください。{schema}"
+        resp = model.generate_content(prompt)
+        txt = resp.text.strip().replace("```json", "").replace("```", "")
+        return json.loads(txt)
+    except Exception:
+        return {}
+
+
+def _execute_plan(df: pd.DataFrame, plan: dict):
+    """計画に従ってDataFrameを抽出/集計し、(結果DF, サマリ文字列)を返す。"""
+    if df.empty:
+        return pd.DataFrame(), "記録がありません。"
+
+    work = df.copy()
+    # 型整形
+    work["date"] = pd.to_datetime(work["date"], errors="coerce")
+    num_cols = ["calories", "protein", "carbohydrates", "fat", "vitamin_d", "salt", "zinc", "folic_acid"]
+    for c in num_cols:
+        if c in work.columns:
+            work[c] = pd.to_numeric(work[c], errors="coerce")
+
+    # フィルタ
+    pr = plan or {}
+    dr = pr.get("date_range") or {}
+    if dr.get("start"):
+        start = pd.to_datetime(dr.get("start"), errors="coerce")
+        work = work[work["date"] >= start]
+    if dr.get("end"):
+        end = pd.to_datetime(dr.get("end"), errors="coerce")
+        work = work[work["date"] <= end]
+
+    mts = pr.get("meal_types") or []
+    if mts:
+        work = work[work["meal_type"].isin(mts)]
+
+    kw = pr.get("name_contains")
+    if kw:
+        work = work[work["food_name"].str.contains(str(kw), case=False, na=False)]
+
+    action = (pr.get("action") or "filter").lower()
+    metrics = pr.get("metrics") or ["calories"]
+
+    if work.empty:
+        return pd.DataFrame(), "条件に一致する記録がありません。"
+
+    if action == "filter":
+        cols = ["date", "meal_type", "food_name"] + [c for c in metrics if c in work.columns]
+        out = work[cols].sort_values("date", ascending=False)
+        return out, f"{len(out)}件ヒット"
+
+    if action in ("aggregate", "trend"):
+        gb = pr.get("group_by")
+        agg = pr.get("agg") or "sum"
+        agg_map = {m: agg for m in metrics if m in work.columns}
+        if gb in ("date", "meal_type"):
+            out = work.groupby(gb).agg(agg_map).reset_index()
+            if gb == "date":
+                out = out.sort_values("date")
+            return out, f"{gb}別の{agg}"
+        else:
+            out = work[metrics].agg(agg)
+            out = out.to_frame(name=agg).reset_index().rename(columns={"index": "metric"})
+            return out, f"全体の{agg}"
+
+    if action == "top_n":
+        sort_by = pr.get("sort_by") or metrics[0]
+        order = (pr.get("sort_order") or "desc").lower() == "desc"
+        n = int(pr.get("top_n") or 5)
+        cols = ["date", "meal_type", "food_name", sort_by]
+        cols = [c for c in cols if c in work.columns]
+        out = work.sort_values(sort_by, ascending=not order)[cols].head(n)
+        return out, f"{sort_by}の上位{n}件"
+
+    # default
+    out = work[["date", "meal_type", "food_name"] + [c for c in metrics if c in work.columns]].sort_values("date", ascending=False)
+    return out, f"{len(out)}件ヒット"
 
 # =============================
 # App
@@ -538,6 +654,27 @@ if menu == "記録する":
                         st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
+    # ---- Data chat under list ----
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🧠 記録データに質問する")
+        st.caption("例：『先週のたんぱく質の合計』『今日の朝食』『水分補給の合計』『7/1~7/7のカロリー推移』など")
+        q = st.text_input("質問", key="data_chat_q")
+        if st.button("送信", key="data_chat_send"):
+            if not q.strip():
+                st.warning("質問を入力してください。")
+            else:
+                with st.spinner("解析中..."):
+                    plan = _nl_to_plan(q)
+                    out_df, summary = _execute_plan(all_records_df, plan)
+                st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
+                st.write(summary)
+                if not out_df.empty:
+                    st.dataframe(out_df, use_container_width=True)
+                else:
+                    st.info("該当データがありません。キーワードや期間を変えてみてください。")
+        st.markdown('</div>', unsafe_allow_html=True)
+
 # =============================
 # ADVICE
 # =============================
@@ -560,7 +697,22 @@ elif menu == "相談する":
             """
         )
         base_prompt = (
-            f"あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、優しく励ますトーンで、具体的なアドバイスをMarkdown形式でお願いします。\n\n# クライアント情報\n{user_profile}\n\n"
+            "あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
+"
+            "出力ルール:
+"
+            "- 挨拶・導入・締めの定型文は不要
+"
+            "- 年齢・性別などの呼称を本文に含めない
+"
+            "- 回答は必要な要点のみ（最大5項目の箇条書き中心）
+"
+            "- 記録に基づく引用は最小限の数値のみ
+
+"
+            "参考情報（出力に含めない）:
+" + user_profile + "
+"
         )
         prompt_to_send = ""
 
