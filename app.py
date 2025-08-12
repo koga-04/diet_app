@@ -12,7 +12,7 @@ import io
 # =============================
 st.set_page_config(
     page_title="食生活アドバイザー",
-    page_icon="💧",
+    page_icon="🍳",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -219,6 +219,15 @@ def delete_record(record_id):
 # Gemini helpers
 # =============================
 
+def get_advice_from_gemini(prompt: str) -> str:
+    """テキストプロンプトからアドバイスを生成（gemini-2.5-flash）。"""
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        resp = model.generate_content(prompt)
+        return (resp.text or "").strip()
+    except Exception as e:
+        st.er
+
 def analyze_image_with_gemini(image_bytes):
     """画像を解析し、{ foodName, calories, nutrients{...} } を返す。
     まず gemini-2.5-flash を試し、ダメなら 1.5 系にフォールバック。
@@ -335,7 +344,8 @@ def _refine_by_note(food_name: str, nutrients: dict, note: str):
 """
     prompt_parts = [
         "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
-        "現在の推定: " + base_json + "\\n補足: " + (note or ""),
+        "現在の推定: " + base_json + "
+補足: " + (note or ""),
         schema,
     ]
     try:
@@ -980,49 +990,3 @@ elif menu == "相談する":
 
         prompt_full = f"""
 あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
-出力はMarkdownで、次の構成を必ず含めてください:
-## 概要
-## 良かった点
-## 改善ポイント
-## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
-## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
-## 具体的アクションプラン（食事例3〜5・買い物リスト）
-## 次の7日間の目標
-注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
-
-参考情報（出力に含めない）:
-{user_profile}
-        """
-        prompt_to_send = ""
-
-        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
-
-        with tab1:
-            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
-            if st.button("AIに相談する", key="text_consult"):
-                if question:
-                    record_history = all_records_df.head(30).to_string(index=False)
-                    prompt_to_send = (
-                        f"{prompt_qna}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
-                    )
-                else:
-                    st.warning("相談内容を入力してください。")
-
-        with tab2:
-            st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
-            if st.button("アドバイスをもらう", key="all_consult"):
-                record_history = all_records_df.to_string(index=False)
-                prompt_to_send = f"""{prompt_full}# 全ての記録
-{record_history}
-
-記録データに即した網羅的な分析レポートを出力してください。
-"""
-
-        if prompt_to_send:
-            with st.spinner("AIがアドバイスを生成中です..."):
-                advice = get_advice_from_gemini(prompt_to_send)
-                with st.chat_message("ai", avatar="💬"):
-                    st.markdown(advice)
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
