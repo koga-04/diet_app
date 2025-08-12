@@ -348,9 +348,7 @@ def _answer_about_meal(food_name: str, nutrients: dict, question: str) -> str:
 - 不確実な点は推定であることを一言添える
 """
     try:
-        resp = model.generate_content(context + "
-
-質問: " + question)
+        resp = model.generate_content([context, "質問: " + question])
         return resp.text
     except Exception as e:
         return f"回答生成に失敗しました: {e}"
