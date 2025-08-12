@@ -335,8 +335,7 @@ def _refine_by_note(food_name: str, nutrients: dict, note: str):
 """
     prompt_parts = [
         "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
-        "現在の推定: " + base_json + "
-補足: " + (note or ""),
+        "現在の推定: " + base_json + "\\n補足: " + (note or ""),
         schema,
     ]
     try:
@@ -1026,3 +1025,4 @@ elif menu == "相談する":
                     st.markdown(advice)
 
         st.markdown('</div>', unsafe_allow_html=True)
+
