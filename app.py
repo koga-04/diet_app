@@ -156,7 +156,7 @@ def init_db():
         )
         """
     )
-    # ★改修要望1: 運動記録テーブルを追加
+    # 運動記録テーブル
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS exercises (
@@ -225,7 +225,7 @@ def delete_record(record_id):
     conn.commit()
     conn.close()
 
-# ★改修要望1: CRUD helpers for Exercises
+# CRUD helpers for Exercises
 def add_exercise_record(date, exercise_name, duration_minutes):
     conn = get_db_connection()
     c = conn.cursor()
@@ -624,46 +624,56 @@ def _safe_run_sql(sql: str, params: list):
 # =============================
 init_db()
 
-# --- Header (Hero) ---
+# --- Sidebar ---
+with st.sidebar:
+    st.markdown("### メニュー")
+    menu = st.radio("選択", ["食事記録", "運動記録", "相談する"], index=0, label_visibility="collapsed")
+
+# --- Dynamic Header ---
+# ★修正点: ページに応じてヘッダーの内容を変更
+if menu == "食事記録":
+    title = "🍽️ 食事記録"
+    subtitle = "日々の食事やサプリ・水分補給をシンプルに記録しましょう。"
+elif menu == "運動記録":
+    title = "💪 運動記録"
+    subtitle = "日々の運動を記録して、活動の習慣を可視化しましょう。"
+else: # 相談する
+    title = "💬 AIに相談する"
+    subtitle = "食事と運動の記録を基に、AIがパーソナルなアドバイスをします。"
+
 st.markdown(
-    """
+    f"""
     <div class="hero">
-      <div class="hero-title">💧 食生活アドバイザー</div>
-      <div class="hero-sub">日々の食事やサプリ・水分補給をシンプルに記録し、AIがやさしくアドバイスします。</div>
+      <div class="hero-title">{title}</div>
+      <div class="hero-sub">{subtitle}</div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# --- Sidebar ---
-with st.sidebar:
-    st.markdown("### メニュー")
-    # ★改修要望1: サイドバーのメニュー名を変更・追加
-    menu = st.radio("選択", ["食事記録", "運動記録", "相談する"], index=0, label_visibility="collapsed")
-
 # --- Quick glance (today) ---
-all_df = get_all_records()
+if menu != "相談する": # 相談ページでは非表示
+    all_df = get_all_records()
 
-def _sum_today(df: pd.DataFrame):
-    if df.empty:
-        return {"cal": 0, "p": 0, "c": 0, "f": 0}
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    t = df[df["date"] == today_str]
-    # 除外: 水分補給
-    t = t[t["meal_type"] != "水分補給"]
-    return {
-        "cal": float(t["calories"].fillna(0).sum()),
-        "p": float(t["protein"].fillna(0).sum()),
-        "c": float(t["carbohydrates"].fillna(0).sum()),
-        "f": float(t["fat"].fillna(0).sum()),
-    }
+    def _sum_today(df: pd.DataFrame):
+        if df.empty:
+            return {"cal": 0, "p": 0, "c": 0, "f": 0}
+        today_str = datetime.date.today().strftime("%Y-%m-%d")
+        t = df[df["date"] == today_str]
+        t = t[t["meal_type"] != "水分補給"]
+        return {
+            "cal": float(t["calories"].fillna(0).sum()),
+            "p": float(t["protein"].fillna(0).sum()),
+            "c": float(t["carbohydrates"].fillna(0).sum()),
+            "f": float(t["fat"].fillna(0).sum()),
+        }
 
-sum_today = _sum_today(all_df)
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("本日のカロリー", f"{int(sum_today['cal'])} kcal")
-col2.metric("たんぱく質", f"{sum_today['p']:.1f} g")
-col3.metric("炭水化物", f"{sum_today['c']:.1f} g")
-col4.metric("脂質", f"{sum_today['f']:.1f} g")
+    sum_today = _sum_today(all_df)
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("本日のカロリー", f"{int(sum_today['cal'])} kcal")
+    col2.metric("たんぱく質", f"{sum_today['p']:.1f} g")
+    col3.metric("炭水化物", f"{sum_today['c']:.1f} g")
+    col4.metric("脂質", f"{sum_today['f']:.1f} g")
 
 # =============================
 # RECORD
@@ -672,9 +682,7 @@ if menu == "食事記録":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("食事の記録")
-        st.caption("食事・サプリ・水分補給を記録しましょう。")
-
-        # type + date
+        
         left, right = st.columns([1, 1])
         with left:
             meal_type = st.selectbox(
@@ -904,7 +912,6 @@ if menu == "食事記録":
                         st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-# ★改修要望1: 運動記録ページを新設
 elif menu == "運動記録":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -991,7 +998,6 @@ elif menu == "相談する":
             - 苦手な食べ物: 生のトマト、納豆
             """
         )
-        # ★改修要望1: プロンプトに運動記録のセクションを追加
         prompt_qna = f"""
 あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
 出力ルール:
