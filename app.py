@@ -14,6 +14,68 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- デザインをカスタマイズするためのCSS ---
+st.markdown("""
+<style>
+    /* 全体のフォントと背景色 */
+    body {
+        font-family: 'Helvetica Neue', 'Arial', sans-serif;
+    }
+    .stApp {
+        background-color: #F0F2F6;
+    }
+
+    /* カード風コンテナのスタイル */
+    .card {
+        background-color: white;
+        border-radius: 10px;
+        padding: 25px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+    }
+
+    /* Streamlitの主要コンポーネントのスタイル上書き */
+    .stButton>button {
+        border-radius: 8px;
+        border: none;
+        padding: 10px 20px;
+        background-color: #4A90E2;
+        color: white;
+        transition: background-color 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #357ABD;
+    }
+    
+    /* 削除ボタンのスタイル */
+    .stButton>button[kind="primary"] {
+        background-color: #D0021B;
+    }
+     .stButton>button[kind="primary"]:hover {
+        background-color: #A00115;
+    }
+
+    /* タブのスタイル */
+    .stTabs [data-baseweb="tab-list"] {
+		gap: 24px;
+	}
+    .stTabs [data-baseweb="tab"] {
+		height: 50px;
+        white-space: pre-wrap;
+		background-color: transparent;
+		border-radius: 4px 4px 0px 0px;
+		gap: 1px;
+		padding-top: 10px;
+		padding-bottom: 10px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #F0F2F6;
+    }
+
+</style>
+""", unsafe_allow_html=True)
+
+
 # --- Google Gemini APIキーの設定 ---
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
@@ -137,12 +199,15 @@ init_db()
 
 st.title("🥗 食生活アドバイザー")
 
-menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
+menu = st.sidebar.radio("メニューを選択", ["🖊️ 記録する", "💬 相談する"], label_visibility="collapsed")
 
-if menu == "記録する":
-    st.header("🖊️ 今日の記録")
-
-    with st.expander("記録フォームを開く", expanded=True):
+if "🖊️" in menu:
+    
+    # カード風コンテナで記録フォームを囲む
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("今日の記録")
+        
         meal_type = st.selectbox(
             "記録の種類",
             ["朝食", "昼食", "夕食", "間食", "サプリ", "水分補給"]
@@ -213,106 +278,116 @@ if menu == "記録する":
                         cols = st.columns(2)
                         calories = cols[0].number_input("カロリー (kcal)", value=float(nut.get('calories', 0)), format="%.1f")
                         protein = cols[1].number_input("たんぱく質 (g)", value=float(nut.get('protein', 0)), format="%.1f")
-                        # ... 他の栄養素も同様 ...
+                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(nut.get('carbohydrates', 0)), format="%.1f")
+                        fat = cols[1].number_input("脂質 (g)", value=float(nut.get('fat', 0)), format="%.1f")
+                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(nut.get('vitaminD', 0)), format="%.1f")
+                        salt = cols[1].number_input("食塩相当量 (g)", value=float(nut.get('salt', 0)), format="%.1f")
+                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get('zinc', 0)), format="%.1f")
+                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get('folic_acid', 0)), format="%.1f")
+                        
                         if st.form_submit_button("この内容で食事を記録する"):
                             if food_name:
-                                nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': nut.get('carbohydrates',0), 'fat': nut.get('fat',0), 'vitaminD': nut.get('vitaminD',0), 'salt': nut.get('salt',0), 'zinc': nut.get('zinc',0), 'folic_acid': nut.get('folic_acid',0)}
+                                nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates, 'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid}
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
                                 del st.session_state.analysis_result
                                 st.rerun()
                             else:
                                 st.warning("食事名を入力してください。")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    st.header("📖 記録一覧")
-    all_records_df = get_all_records()
-    if all_records_df.empty:
-        st.info("まだ記録がありません。")
-    else:
-        display_df = all_records_df.copy()
-        display_df['削除'] = [False] * len(display_df)
-        
-        # カロリー表示を整形
-        def format_calories(row):
-            if row['meal_type'] in ["水分補給", "サプリ"]:
-                return "ー"
-            return f"{int(row['calories'])} kcal" if pd.notna(row['calories']) else "ー"
-        display_df['カロリー'] = display_df.apply(format_calories, axis=1)
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("記録一覧")
+        all_records_df = get_all_records()
+        if all_records_df.empty:
+            st.info("まだ記録がありません。")
+        else:
+            display_df = all_records_df.copy()
+            display_df['削除'] = [False] * len(display_df)
+            
+            def format_calories(row):
+                if row['meal_type'] in ["水分補給", "サプリ"]:
+                    return "ー"
+                return f"{int(row['calories'])} kcal" if pd.notna(row['calories']) else "ー"
+            display_df['カロリー'] = display_df.apply(format_calories, axis=1)
 
-        edited_df = st.data_editor(
-            display_df[['date', 'meal_type', 'food_name', 'カロリー', '削除']],
-            column_config={
-                "date": "日付", "meal_type": "種類", "food_name": "内容", 
-                "カロリー": "カロリー/量", "削除": st.column_config.CheckboxColumn("削除？")
-            },
-            hide_index=True, key="data_editor"
-        )
-        
-        if edited_df['削除'].any():
-            if st.button("選択した記録を削除", type="primary"):
-                ids_to_delete = edited_df[edited_df['削除']].index
-                original_ids = all_records_df.loc[ids_to_delete, 'id']
-                for record_id in original_ids:
-                    delete_record(record_id)
-                st.success("選択した記録を削除しました。")
-                st.rerun()
+            edited_df = st.data_editor(
+                display_df[['date', 'meal_type', 'food_name', 'カロリー', '削除']],
+                column_config={
+                    "date": "日付", "meal_type": "種類", "food_name": "内容", 
+                    "カロリー": "カロリー/量", "削除": st.column_config.CheckboxColumn("削除？")
+                },
+                hide_index=True, key="data_editor"
+            )
+            
+            if edited_df['削除'].any():
+                if st.button("選択した記録を削除", type="primary"):
+                    ids_to_delete = edited_df[edited_df['削除']].index
+                    original_ids = all_records_df.loc[ids_to_delete, 'id']
+                    for record_id in original_ids:
+                        delete_record(record_id)
+                    st.success("選択した記録を削除しました。")
+                    st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-elif menu == "相談する":
-    st.header("💬 AIに相談する")
+elif "💬" in menu:
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("AIに相談する")
 
-    all_records_df = get_all_records()
-    if all_records_df.empty:
-        st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
-        st.stop()
+        all_records_df = get_all_records()
+        if all_records_df.empty:
+            st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
+            st.stop()
 
-    # ★修正点: プライバシー情報を削除
-    user_profile = """
-    - 年齢: 35歳女性
-    - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
-    - 希望: アンチエイジング
-    - 苦手な食べ物: 生のトマト、納豆
-    """
-    base_prompt = f"あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、優しく励ますトーンで、具体的なアドバイスをMarkdown形式でお願いします。\n\n# クライアント情報\n{user_profile}\n\n"
-    prompt_to_send = ""
+        user_profile = """
+        - 年齢: 35歳女性
+        - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
+        - 希望: アンチエイジング
+        - 苦手な食べ物: 生のトマト、納豆
+        """
+        base_prompt = f"あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、優しく励ますトーンで、具体的なアドバイスをMarkdown形式でお願いします。\n\n# クライアント情報\n{user_profile}\n\n"
+        prompt_to_send = ""
 
-    # ★修正点: タブで相談方法を選択
-    tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
+        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
 
-    with tab1:
-        question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
-        if st.button("AIに相談する", key="text_consult"):
-            if question:
-                record_history = all_records_df.head(30).to_string(index=False)
-                prompt_to_send = f"{base_prompt}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
-            else:
-                st.warning("相談内容を入力してください。")
-
-    with tab2:
-        st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
-        if st.button("アドバイスをもらう", key="all_consult"):
-            record_history = all_records_df.to_string(index=False)
-            prompt_to_send = f"{base_prompt}# 全ての記録\n{record_history}\n\n上記の記録全体を評価し、総合的なアドバイスをしてください。"
-
-    with tab3:
-        today = datetime.date.today()
-        one_week_ago = today - datetime.timedelta(days=7)
-        cols = st.columns(2)
-        start_date = cols[0].date_input("開始日", one_week_ago)
-        end_date = cols[1].date_input("終了日", today)
-        if st.button("指定期間のアドバイスをもらう", key="period_consult"):
-            if start_date > end_date:
-                st.error("終了日は開始日以降に設定してください。")
-            else:
-                period_records_df = get_records_by_period(start_date, end_date)
-                if period_records_df.empty:
-                    st.warning("指定された期間に記録がありません。")
+        with tab1:
+            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
+            if st.button("AIに相談する", key="text_consult"):
+                if question:
+                    record_history = all_records_df.head(30).to_string(index=False)
+                    prompt_to_send = f"{base_prompt}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
                 else:
-                    record_history = period_records_df.to_string(index=False)
-                    prompt_to_send = f"{base_prompt}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
+                    st.warning("相談内容を入力してください。")
 
-    if prompt_to_send:
-        with st.spinner("AIがアドバイスを生成中です..."):
-            advice = get_advice_from_gemini(prompt_to_send)
-            # ★修正点: チャット形式で表示
-            with st.chat_message("ai", avatar="🥗"):
-                st.markdown(advice)
+        with tab2:
+            st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
+            if st.button("アドバイスをもらう", key="all_consult"):
+                record_history = all_records_df.to_string(index=False)
+                prompt_to_send = f"{base_prompt}# 全ての記録\n{record_history}\n\n上記の記録全体を評価し、総合的なアドバイスをしてください。"
+
+        with tab3:
+            today = datetime.date.today()
+            one_week_ago = today - datetime.timedelta(days=7)
+            cols = st.columns(2)
+            start_date = cols[0].date_input("開始日", one_week_ago)
+            end_date = cols[1].date_input("終了日", today)
+            if st.button("指定期間のアドバイスをもらう", key="period_consult"):
+                if start_date > end_date:
+                    st.error("終了日は開始日以降に設定してください。")
+                else:
+                    period_records_df = get_records_by_period(start_date, end_date)
+                    if period_records_df.empty:
+                        st.warning("指定された期間に記録がありません。")
+                    else:
+                        record_history = period_records_df.to_string(index=False)
+                        prompt_to_send = f"{base_prompt}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
+
+        if prompt_to_send:
+            with st.spinner("AIがアドバイスを生成中です..."):
+                advice = get_advice_from_gemini(prompt_to_send)
+                with st.chat_message("ai", avatar="🥗"):
+                    st.markdown(advice)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
