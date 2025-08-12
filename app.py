@@ -399,11 +399,11 @@ def llm_to_sql(question: str) -> dict:
     """自然文から安全なSQL(JSON)を生成する。Gemini 2.5 Flash を使用。"""
     today_jst = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().strftime("%Y-%m-%d")
     model = genai.GenerativeModel("gemini-2.5-flash")
-    schema = f"""
+    schema_tmpl = """
 あなたはSQLite用のSQLアシスタントです。次の制約を必ず守ってください:
 - SELECT文のみ。INSERT/UPDATE/DELETE/ALTER/DROP は禁止（セミコロン含む）。
 - FROM は必ず meals のみ。
-- 相対日付（今日/昨日/先週など）は日本時間({today_jst})基準で具体的なYYYY-MM-DDに解決。
+- 相対日付（今日/昨日/先週など）は日本時間(__TODAY__)基準で具体的なYYYY-MM-DDに解決。
 - 可能なら ? プレースホルダと params を使う。
 - 結果行は最大500行（LIMIT を付ける）。
 
@@ -419,6 +419,7 @@ JSONのみを返してください（説明不要・コードフェンス不要�
   "intent": "日本語での簡単な説明"
 }
 """
+    schema = schema_tmpl.replace("__TODAY__", today_jst)
     prompt = f"""ユーザー質問: {question}
 
 上記の制約でSQL JSONを返してください。
