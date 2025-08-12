@@ -133,7 +133,8 @@ def analyze_image_with_gemini(image_bytes):
 
 def get_advice_from_gemini(prompt):
     """テキストプロンプトからアドバイスを生成"""
-    model = genai.GenerativeModel('gemini-pro')
+    # ★修正点: モデル名を最新版に変更
+    model = genai.GenerativeModel('gemini-1.5-flash-latest')
     try:
         response = model.generate_content(prompt)
         return response.text
@@ -167,47 +168,53 @@ if menu == "記録する":
         record_date = st.date_input("日付", datetime.date.today())
 
         if meal_type == "サプリ":
-            supplements = {
-                'マルチビタミン': {'displayName': 'マルチビタミン', 'foodName': 'サプリ: スーパーマルチビタミン&ミネラル', 'nutrients': {'calories': 5, 'protein': 0.02, 'carbohydrates': 0.6, 'fat': 0.05, 'vitaminD': 10.0, 'salt': 0, 'zinc': 6.0, 'folic_acid': 240}},
-                '葉酸': {'displayName': '葉酸', 'foodName': 'サプリ: 葉酸', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0.23, 'fat': 0.004, 'vitaminD': 0, 'salt': 0, 'zinc': 0, 'folic_acid': 480}},
-                'ビタミンD': {'displayName': 'ビタミンD', 'foodName': 'サプリ: ビタミンD', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0, 'fat': 0.12, 'vitaminD': 30.0, 'salt': 0, 'zinc': 0, 'folic_acid': 0}},
-                '亜鉛': {'displayName': '亜鉛', 'foodName': 'サプリ: 亜鉛', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0.17, 'fat': 0.005, 'vitaminD': 0, 'salt': 0, 'zinc': 14.0, 'folic_acid': 0}}
-            }
-            
-            selected_sup = st.selectbox("サプリを選択", list(supplements.keys()))
+            # ★修正点: st.formを使用して記録後にフォームをリセット
+            with st.form(key="supplement_form", clear_on_submit=True):
+                supplements = {
+                    'マルチビタミン': {'displayName': 'マルチビタミン', 'foodName': 'サプリ: スーパーマルチビタミン&ミネラル', 'nutrients': {'calories': 5, 'protein': 0.02, 'carbohydrates': 0.6, 'fat': 0.05, 'vitaminD': 10.0, 'salt': 0, 'zinc': 6.0, 'folic_acid': 240}},
+                    '葉酸': {'displayName': '葉酸', 'foodName': 'サプリ: 葉酸', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0.23, 'fat': 0.004, 'vitaminD': 0, 'salt': 0, 'zinc': 0, 'folic_acid': 480}},
+                    'ビタミンD': {'displayName': 'ビタミンD', 'foodName': 'サプリ: ビタミンD', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0, 'fat': 0.12, 'vitaminD': 30.0, 'salt': 0, 'zinc': 0, 'folic_acid': 0}},
+                    '亜鉛': {'displayName': '亜鉛', 'foodName': 'サプリ: 亜鉛', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0.17, 'fat': 0.005, 'vitaminD': 0, 'salt': 0, 'zinc': 14.0, 'folic_acid': 0}}
+                }
+                
+                selected_sup = st.selectbox("サプリを選択", list(supplements.keys()))
+                submitted = st.form_submit_button("サプリを記録する")
 
-            if st.button("サプリを記録する"):
-                sup_data = supplements[selected_sup]
-                add_record(record_date, "サプリ", sup_data['foodName'], sup_data['nutrients'])
-                st.success(f"{sup_data['displayName']}を記録しました！")
-                st.rerun() # ★修正点
+                if submitted:
+                    sup_data = supplements[selected_sup]
+                    add_record(record_date, "サプリ", sup_data['foodName'], sup_data['nutrients'])
+                    st.success(f"{sup_data['displayName']}を記録しました！")
+
 
         else: # 食事の場合
             input_method = st.radio("記録方法", ["テキスト入力", "画像から入力"])
 
             if input_method == "テキスト入力":
-                food_name = st.text_input("食事名")
-                cols = st.columns(2)
-                calories = cols[0].number_input("カロリー (kcal)", value=0.0, format="%.1f")
-                protein = cols[1].number_input("たんぱく質 (g)", value=0.0, format="%.1f")
-                carbohydrates = cols[0].number_input("炭水化物 (g)", value=0.0, format="%.1f")
-                fat = cols[1].number_input("脂質 (g)", value=0.0, format="%.1f")
-                vitamin_d = cols[0].number_input("ビタミンD (μg)", value=0.0, format="%.1f")
-                salt = cols[1].number_input("食塩相当量 (g)", value=0.0, format="%.1f")
-                zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
-                folic_acid = cols[1].number_input("葉酸 (μg)", value=0.0, format="%.1f")
+                # ★修正点: st.formを使用して記録後にフォームをリセット
+                with st.form(key="text_input_form", clear_on_submit=True):
+                    food_name = st.text_input("食事名")
+                    cols = st.columns(2)
+                    calories = cols[0].number_input("カロリー (kcal)", value=0.0, format="%.1f")
+                    protein = cols[1].number_input("たんぱく質 (g)", value=0.0, format="%.1f")
+                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=0.0, format="%.1f")
+                    fat = cols[1].number_input("脂質 (g)", value=0.0, format="%.1f")
+                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=0.0, format="%.1f")
+                    salt = cols[1].number_input("食塩相当量 (g)", value=0.0, format="%.1f")
+                    zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
+                    folic_acid = cols[1].number_input("葉酸 (μg)", value=0.0, format="%.1f")
+                    
+                    submitted = st.form_submit_button("食事を記録する")
 
-                if st.button("食事を記録する"):
-                    if food_name:
-                        nutrients = {
-                            'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
-                            'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
-                        }
-                        add_record(record_date, meal_type, food_name, nutrients)
-                        st.success(f"{food_name}を記録しました！")
-                        st.rerun() # ★修正点
-                    else:
-                        st.warning("食事名を入力してください。")
+                    if submitted:
+                        if food_name:
+                            nutrients = {
+                                'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
+                                'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
+                            }
+                            add_record(record_date, meal_type, food_name, nutrients)
+                            st.success(f"{food_name}を記録しました！")
+                        else:
+                            st.warning("食事名を入力してください。")
 
             elif input_method == "画像から入力":
                 uploaded_file = st.file_uploader("食事の画像をアップロード", type=["jpg", "jpeg", "png"])
@@ -226,33 +233,37 @@ if menu == "記録する":
                             st.error("分析に失敗しました。テキストで入力してください。")
                 
                 if 'analysis_result' in st.session_state:
-                    result = st.session_state.analysis_result
                     st.info("AIによる分析結果です。必要に応じて修正して記録してください。")
+                    result = st.session_state.analysis_result
                     
-                    food_name = st.text_input("食事名", value=result.get('foodName', ''))
-                    nut = result.get('nutrients', {})
-                    cols = st.columns(2)
-                    calories = cols[0].number_input("カロリー (kcal)", value=float(nut.get('calories', 0)), format="%.1f")
-                    protein = cols[1].number_input("たんぱく質 (g)", value=float(nut.get('protein', 0)), format="%.1f")
-                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(nut.get('carbohydrates', 0)), format="%.1f")
-                    fat = cols[1].number_input("脂質 (g)", value=float(nut.get('fat', 0)), format="%.1f")
-                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(nut.get('vitaminD', 0)), format="%.1f")
-                    salt = cols[1].number_input("食塩相当量 (g)", value=float(nut.get('salt', 0)), format="%.1f")
-                    zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get('zinc', 0)), format="%.1f")
-                    folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get('folic_acid', 0)), format="%.1f")
+                    # ★修正点: st.formを使用して記録後にフォームをリセット
+                    with st.form(key="image_confirm_form", clear_on_submit=True):
+                        food_name = st.text_input("食事名", value=result.get('foodName', ''))
+                        nut = result.get('nutrients', {})
+                        cols = st.columns(2)
+                        calories = cols[0].number_input("カロリー (kcal)", value=float(nut.get('calories', 0)), format="%.1f")
+                        protein = cols[1].number_input("たんぱく質 (g)", value=float(nut.get('protein', 0)), format="%.1f")
+                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(nut.get('carbohydrates', 0)), format="%.1f")
+                        fat = cols[1].number_input("脂質 (g)", value=float(nut.get('fat', 0)), format="%.1f")
+                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(nut.get('vitaminD', 0)), format="%.1f")
+                        salt = cols[1].number_input("食塩相当量 (g)", value=float(nut.get('salt', 0)), format="%.1f")
+                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get('zinc', 0)), format="%.1f")
+                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get('folic_acid', 0)), format="%.1f")
 
-                    if st.button("この内容で食事を記録する"):
-                        if food_name:
-                            nutrients = {
-                                'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
-                                'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
-                            }
-                            add_record(record_date, meal_type, food_name, nutrients)
-                            st.success(f"{food_name}を記録しました！")
-                            del st.session_state.analysis_result
-                            st.rerun() # ★修正点
-                        else:
-                            st.warning("食事名を入力してください。")
+                        submitted = st.form_submit_button("この内容で食事を記録する")
+
+                        if submitted:
+                            if food_name:
+                                nutrients = {
+                                    'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
+                                    'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
+                                }
+                                add_record(record_date, meal_type, food_name, nutrients)
+                                st.success(f"{food_name}を記録しました！")
+                                # セッションステートをクリーンアップ
+                                del st.session_state.analysis_result
+                            else:
+                                st.warning("食事名を入力してください。")
 
 
     st.header("記録一覧")
@@ -293,7 +304,7 @@ if menu == "記録する":
                 for record_id in ids_to_delete:
                     delete_record(record_id)
                 st.success("選択した記録を削除しました。")
-                st.rerun() # ★修正点
+                st.rerun()
 
 # --- 相談ページ ---
 elif menu == "相談する":
