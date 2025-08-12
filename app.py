@@ -220,7 +220,7 @@ def delete_record(record_id):
 # =============================
 
 def get_advice_from_gemini(prompt: str) -> str:
-    """テキストプロンプトからアドバイスを生成（gemini-2.5-flash）。"""
+    """テキストプロンプトからアドバイスを生成（gemini-1.5-flash-latest）。"""
     try:
         model = genai.GenerativeModel("gemini-1.5-flash-latest")
         resp = model.generate_content(prompt)
@@ -229,7 +229,6 @@ def get_advice_from_gemini(prompt: str) -> str:
         st.error(f"アドバイス生成中にエラーが発生しました: {e}")
         return "アドバイスの生成に失敗しました。"
 
-# ★改修要望1 & 2: JSON構造を変更し、料理ごとの内訳と根拠を要求
 def analyze_image_with_gemini(image_bytes):
     """画像を解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
     model_candidates = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
@@ -268,7 +267,6 @@ def analyze_image_with_gemini(image_bytes):
     st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
     return None
 
-# ★改修要望1 & 2: JSON構造を変更し、料理ごとの内訳と根拠を要求
 def analyze_text_with_gemini(description: str):
     """フリーテキストを解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
     model = genai.GenerativeModel("gemini-1.5-flash-latest")
@@ -729,12 +727,10 @@ if menu == "記録する":
                         else:
                             st.error("分析に失敗しました。テキストで入力してください。")
             
-            # ★改修要望1 & 2: 分析結果の表示と確認フローを刷新
             if input_method in ["フリー記述入力", "画像から入力"] and "analysis_result" in st.session_state:
                 st.info("AIの推定結果です。内容を確認し、量を調整してから記録してください。")
                 result = st.session_state.analysis_result
                 
-                # 料理ごとの内訳を表示
                 st.markdown("##### AIによる推定内訳")
                 dishes_df = pd.DataFrame(result.get("dishes", []))
                 if not dishes_df.empty:
@@ -774,80 +770,54 @@ if menu == "記録する":
 
                 factor = float(st.session_state.serve_factor)
                 scaled = _scale_nutrients(base_pack, factor)
-                effective = st.session_state.get("supp_nutrients", scaled) if st.session_state.get("supp_adopted") else scaled
-
+                
                 with fc1:
                     st.caption("プレビュー（合計値）")
                     m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("カロリー", f"{effective['calories']:.0f} kcal")
-                    m2.metric("たんぱく質", f"{effective['protein']:.1f} g")
-                    m3.metric("炭水化物", f"{effective['carbohydrates']:.1f} g")
-                    m4.metric("脂質", f"{effective['fat']:.1f} g")
+                    m1.metric("カロリー", f"{scaled['calories']:.0f} kcal")
+                    m2.metric("たんぱく質", f"{scaled['protein']:.1f} g")
+                    m3.metric("炭水化物", f"{scaled['carbohydrates']:.1f} g")
+                    m4.metric("脂質", f"{scaled['fat']:.1f} g")
 
                 st.divider()
-                st.caption("この食事全体についての補足説明（任意）")
-                note = st.text_area("補足を入力", key="meal_note", placeholder="例：ご飯は少なめにした、ドレッシングは使わなかった など")
-
-                current_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
-                current_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
-
-                if st.button("補足を解析して合計値を修正", key="apply_note_btn"):
-                    with st.spinner("補足を解析中..."):
-                        cand = _refine_by_note(current_food or "料理", current_pack, note or "")
-                    if cand and "nutrients" in cand:
-                        st.session_state.supp_candidate = cand
-                        st.success("修正案を作成しました。下の比較を確認してください。")
+                
+                # ★修正点: 記録ボタンのロジックを変更し、個別の料理を記録するように
+                if st.button("この内訳で食事を記録する", use_container_width=True, type="primary"):
+                    dishes = result.get("dishes", [])
+                    factor = float(st.session_state.get("serve_factor", 1.0))
+                    
+                    if not dishes:
+                        st.warning("記録する料理がありません。")
                     else:
-                        st.warning("補足の解釈に失敗しました。")
+                        recorded_dishes = []
+                        with st.spinner("記録中..."):
+                            for dish in dishes:
+                                food_name = dish.get("name")
+                                nutrients = dish.get("nutrients", {})
+                                scaled_nutrients = _scale_nutrients(nutrients, factor)
+                                
+                                # Add all nutrient keys even if missing, to avoid DB errors
+                                full_nutrients = {
+                                    "calories": scaled_nutrients.get("calories"),
+                                    "protein": scaled_nutrients.get("protein"),
+                                    "carbohydrates": scaled_nutrients.get("carbohydrates"),
+                                    "fat": scaled_nutrients.get("fat"),
+                                    "vitaminD": scaled_nutrients.get("vitaminD"),
+                                    "salt": scaled_nutrients.get("salt"),
+                                    "zinc": scaled_nutrients.get("zinc"),
+                                    "folic_acid": scaled_nutrients.get("folic_acid"),
+                                }
+                                
+                                add_record(record_date, meal_type, food_name, full_nutrients)
+                                recorded_dishes.append(food_name)
 
-                if "supp_candidate" in st.session_state:
-                    cand = st.session_state.supp_candidate
-                    cand_food = cand.get("foodName") or current_food
-                    cand_pack = cand.get("nutrients") or current_pack
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.caption("現在の合計値")
-                        st.dataframe(pd.DataFrame([current_pack]))
-                    with c2:
-                        st.caption("修正案")
-                        st.dataframe(pd.DataFrame([cand_pack]))
-                    a1, a2 = st.columns(2)
-                    if a1.button("この修正を採用", key="accept_note"):
-                        st.session_state.supp_food_name = cand_food
-                        st.session_state.supp_nutrients = cand_pack
-                        st.session_state.supp_adopted = True
-                        del st.session_state.supp_candidate
-                        st.success("補足を反映しました。")
+                        st.success(f"{len(recorded_dishes)}件の料理を記録しました: {', '.join(recorded_dishes)}")
+                        
+                        # Clear session state
+                        for key in ["analysis_result", "serve_factor", "supp_candidate", "supp_food_name", "supp_nutrients", "supp_adopted"]:
+                            st.session_state.pop(key, None)
                         st.rerun()
-                    if a2.button("修正案を破棄", key="discard_note"):
-                        del st.session_state.supp_candidate
-                        st.info("修正案を破棄しました。")
 
-                final_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
-                final_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
-
-                with st.form(key="image_confirm_form"):
-                    food_name = st.text_input("記録名", value=final_food)
-                    st.caption("最終的な合計値を手動で修正することもできます。")
-                    cols = st.columns(2)
-                    calories = cols[0].number_input("カロリー (kcal)", value=float(final_pack.get("calories", 0.0)), format="%.1f")
-                    protein = cols[1].number_input("たんぱく質 (g)", value=float(final_pack.get("protein", 0.0)), format="%.1f")
-                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(final_pack.get("carbohydrates", 0.0)), format="%.1f")
-                    fat = cols[1].number_input("脂質 (g)", value=float(final_pack.get("fat", 0.0)), format="%.1f")
-                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(final_pack.get("vitaminD", 0.0)), format="%.1f")
-                    salt = cols[1].number_input("食塩相当量 (g)", value=float(final_pack.get("salt", 0.0)), format="%.1f")
-                    zinc = cols[0].number_input("亜鉛 (mg)", value=float(final_pack.get("zinc", 0.0)), format="%.1f")
-
-                    if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
-                        if food_name:
-                            nutrients = { "calories": calories, "protein": protein, "carbohydrates": carbohydrates, "fat": fat, "vitaminD": vitamin_d, "salt": salt, "zinc": zinc, }
-                            add_record(record_date, meal_type, food_name, nutrients)
-                            st.success(f"{food_name}を記録しました！")
-                            for key in ["analysis_result", "serve_factor", "supp_candidate", "supp_food_name", "supp_nutrients", "supp_adopted"]:
-                                st.session_state.pop(key, None)
-                            st.rerun()
-                        else:
-                            st.warning("食事名を入力してください。")
         st.markdown('</div>', unsafe_allow_html=True)
 
     # ---- List ----
