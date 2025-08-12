@@ -220,9 +220,15 @@ def delete_record(record_id):
 # =============================
 
 def analyze_image_with_gemini(image_bytes):
-    """画像を解析し、{ foodName, calories, nutrients{...} } を返す"""
-    # NOTE: 'gemini-pro-vision' でも使えますが、画像解析は 1.5 系でも動作します
-    model = genai.GenerativeModel("gemini-pro-vision")
+    """画像を解析し、{ foodName, calories, nutrients{...} } を返す。
+    まず gemini-2.5-flash を試し、ダメなら 1.5 系にフォールバック。
+    """
+    model_candidates = [
+        "gemini-2.5-flash",  # マルチモーダル対応（利用可なら最優先）
+        "gemini-1.5-flash",  # 旧来の高速・画像対応
+        "gemini-1.5-pro",    # 高精度・画像対応
+    ]
+
     image_pil = Image.open(io.BytesIO(image_bytes))
     prompt = (
         """
@@ -239,13 +245,24 @@ def analyze_image_with_gemini(image_bytes):
         }
         """
     )
-    try:
-        response = model.generate_content([prompt, image_pil])
-        json_text = response.text.strip().replace("```json", "").replace("```", "")
-        return json.loads(json_text)
-    except Exception as e:
-        st.error(f"画像分析中にエラーが発生しました: {e}")
-        return None
+
+    last_err = None
+    for model_name in model_candidates:
+        try:
+            model = genai.GenerativeModel(model_name)
+            resp = model.generate_content([prompt, image_pil])
+            txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+            data = json.loads(txt)
+            # 期待キーの存在を軽くチェック
+            if not isinstance(data, dict) or "nutrients" not in data:
+                raise ValueError("unexpected response schema")
+            return data
+        except Exception as e:
+            last_err = e
+            continue
+
+    st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
+    return None
 
 
 def get_advice_from_gemini(prompt):
