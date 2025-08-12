@@ -742,7 +742,14 @@ if menu == "記録する":
                     }), use_container_width=True)
                 
                 base_food = result.get("summary", "")
-                base_pack = result.get("totalNutrients", {})
+                
+                # ★修正点: 内訳から合計を再計算
+                dishes = result.get("dishes", [])
+                recalculated_total = {}
+                if dishes:
+                    df_nut = pd.DataFrame([d.get('nutrients', {}) for d in dishes])
+                    recalculated_total = df_nut.sum().to_dict()
+                base_pack = recalculated_total
 
                 if "serve_factor" not in st.session_state:
                     st.session_state.serve_factor = 1.0
@@ -774,14 +781,13 @@ if menu == "記録する":
                 with fc1:
                     st.caption("プレビュー（合計値）")
                     m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("カロリー", f"{scaled['calories']:.0f} kcal")
-                    m2.metric("たんぱく質", f"{scaled['protein']:.1f} g")
-                    m3.metric("炭水化物", f"{scaled['carbohydrates']:.1f} g")
-                    m4.metric("脂質", f"{scaled['fat']:.1f} g")
+                    m1.metric("カロリー", f"{scaled.get('calories', 0):.0f} kcal")
+                    m2.metric("たんぱく質", f"{scaled.get('protein', 0):.1f} g")
+                    m3.metric("炭水化物", f"{scaled.get('carbohydrates', 0):.1f} g")
+                    m4.metric("脂質", f"{scaled.get('fat', 0):.1f} g")
 
                 st.divider()
                 
-                # ★修正点: 記録ボタンのロジックを変更し、個別の料理を記録するように
                 if st.button("この内訳で食事を記録する", use_container_width=True, type="primary"):
                     dishes = result.get("dishes", [])
                     factor = float(st.session_state.get("serve_factor", 1.0))
@@ -796,7 +802,6 @@ if menu == "記録する":
                                 nutrients = dish.get("nutrients", {})
                                 scaled_nutrients = _scale_nutrients(nutrients, factor)
                                 
-                                # Add all nutrient keys even if missing, to avoid DB errors
                                 full_nutrients = {
                                     "calories": scaled_nutrients.get("calories"),
                                     "protein": scaled_nutrients.get("protein"),
@@ -813,7 +818,6 @@ if menu == "記録する":
 
                         st.success(f"{len(recorded_dishes)}件の料理を記録しました: {', '.join(recorded_dishes)}")
                         
-                        # Clear session state
                         for key in ["analysis_result", "serve_factor", "supp_candidate", "supp_food_name", "supp_nutrients", "supp_adopted"]:
                             st.session_state.pop(key, None)
                         st.rerun()
@@ -1007,4 +1011,3 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
-"
