@@ -15,7 +15,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- デザインをカスタマイズするためのCSS ---
+# --- ★修正点: app.py内で完結する、全面的に書き直したCSS ---
 st.markdown("""
 <style>
     /* 基本設定 */
@@ -23,62 +23,63 @@ st.markdown("""
     
     html, body, [class*="st-"], [class*="css-"] {
         font-family: 'Noto Sans JP', sans-serif;
-        color: #333;
     }
 
     /* Streamlitのメイン背景色 */
     .stApp {
-        background-color: #F0F2F6;
+        background-color: #F8F9FA; /* より明るいグレー */
     }
 
-    /* ★修正点: サイドバーの折りたたみボタンを確実に非表示 */
-    [data-testid="stSidebarNavCollapseButton"] {
+    /* サイドバーの折りたたみボタンと不要な要素を確実に非表示 */
+    [data-testid="stSidebarNavCollapseButton"], .st-emotion-cache-10y5sf6 {
         display: none;
     }
 
     /* メインタイトル */
     h1 {
-        color: #1E293B;
+        color: #212529;
         font-weight: 700;
-        padding-top: 1rem; /* タイトルの上の余白 */
+        padding-top: 1rem;
     }
     h2, h3, h4, h5, h6 {
-        color: #334155;
+        color: #343A40;
     }
 
     /* カード風コンテナ */
     .card {
         background-color: #FFFFFF;
-        border-radius: 12px;
-        padding: 25px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-        margin-bottom: 20px;
+        border-radius: 16px; /* 角をより丸く */
+        padding: 2rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
+        border: 1px solid #E9ECEF;
+        margin-bottom: 2rem;
     }
 
     /* ボタン */
     .stButton>button {
         border-radius: 8px;
         border: none;
-        padding: 10px 20px;
+        padding: 0.75rem 1.5rem;
         font-weight: 500;
-        background-color: #0068D9;
+        background-color: #4F46E5; /* 参考デザインのインディゴブルー */
         color: white;
-        transition: background-color 0.2s, transform 0.2s;
+        transition: all 0.2s ease-in-out;
     }
     .stButton>button:hover {
-        background-color: #0055B3;
-        transform: scale(1.02);
+        background-color: #4338CA;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
     .stButton>button:active {
-        transform: scale(0.98);
+        transform: translateY(0);
     }
     
     /* 削除ボタン */
     .stButton>button[kind="primary"] {
-        background-color: #E53E3E;
+        background-color: #DC3545;
     }
     .stButton>button[kind="primary"]:hover {
-        background-color: #C53030;
+        background-color: #C82333;
     }
 
     /* 入力ウィジェット */
@@ -86,10 +87,10 @@ st.markdown("""
     .stDateInput>div>div>input, 
     .stSelectbox>div>div,
     .stNumberInput>div>div>input {
-        background-color: #FFFFFF !important;
-        border: 1px solid #CBD5E1 !important;
+        background-color: #F8F9FA !important;
+        border: 1px solid #CED4DA !important;
         border-radius: 8px !important;
-        color: #333 !important;
+        box-shadow: none;
     }
     
     /* Selectboxのドロップダウンメニューのスタイル */
@@ -97,49 +98,40 @@ st.markdown("""
         background-color: #FFFFFF;
         border-radius: 8px;
         border: 1px solid #DEE2E6;
-        padding: 5px 0;
-    }
-    [data-baseweb="popover"] ul li {
-        color: #333 !important;
-        padding: 8px 12px;
     }
     [data-baseweb="popover"] ul li:hover {
-        background-color: #F0F2F6;
-    }
-    [data-baseweb="popover"] ul li[aria-selected="true"] {
-        background-color: #0068D9;
-        color: white !important;
+        background-color: #F1F3F5;
     }
 
     /* タブ */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 24px;
-        border-bottom: 2px solid #E2E8F0;
+        gap: 2rem;
+        border-bottom: 2px solid #E9ECEF;
 	}
     .stTabs [data-baseweb="tab"] {
-        padding: 10px 16px;
+        padding: 1rem 0.5rem;
         background-color: transparent;
-        border-radius: 8px 8px 0 0;
         font-weight: 500;
-        color: #64748B;
+        color: #6C757D;
+        border-bottom: 2px solid transparent;
     }
     .stTabs [aria-selected="true"] {
-        border-bottom: 2px solid #0068D9;
-        color: #0068D9;
+        border-bottom: 2px solid #4F46E5;
+        color: #4F46E5;
     }
 
     /* チャットメッセージ */
     [data-testid="stChatMessage"] {
         background-color: #F8F9FA;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        padding: 16px;
+        border: 1px solid #E9ECEF;
+        border-radius: 12px;
+        padding: 1.5rem;
     }
     
     /* サイドバー */
     [data-testid="stSidebar"] {
         background-color: #FFFFFF;
-        border-right: 1px solid #E2E8F0;
+        border-right: 1px solid #DEE2E6;
     }
 
 </style>
@@ -268,8 +260,6 @@ def get_advice_from_gemini(prompt):
 init_db()
 
 st.title("食生活アドバイザー")
-# ★修正点: st.writeを削除し、説明文をカード内に移動
-# st.write("日々の食事やサプリを記録し、AIからパーソナルなアドバイスを受けましょう。")
 
 menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
 
