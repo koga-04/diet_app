@@ -74,7 +74,7 @@ st.markdown("""
         background-color: #C53030;
     }
 
-    /* 入力ウィジェットの背景とボーダーを無効化してシンプルに */
+    /* 入力ウィジェット */
     .stTextInput>div>div>input, 
     .stDateInput>div>div>input, 
     .stSelectbox>div>div,
@@ -84,6 +84,26 @@ st.markdown("""
         border-radius: 8px !important;
         color: #333 !important;
     }
+    
+    /* ★修正点: Selectboxのドロップダウンメニューのスタイル */
+    [data-baseweb="popover"] ul {
+        background-color: #FFFFFF;
+        border-radius: 8px;
+        border: 1px solid #DEE2E6;
+        padding: 5px 0;
+    }
+    [data-baseweb="popover"] ul li {
+        color: #333 !important;
+        padding: 8px 12px;
+    }
+    [data-baseweb="popover"] ul li:hover {
+        background-color: #F0F2F6;
+    }
+    [data-baseweb="popover"] ul li[aria-selected="true"] {
+        background-color: #0068D9;
+        color: white !important;
+    }
+
 
     /* タブ */
     .stTabs [data-baseweb="tab-list"] {
@@ -241,11 +261,13 @@ def get_advice_from_gemini(prompt):
 # --- アプリのメイン処理 ---
 init_db()
 
-st.title("🥗 食生活アドバイザー")
+# ★修正点: 絵文字を削除
+st.title("食生活アドバイザー")
 
-menu = st.sidebar.radio("メニューを選択", ["🖊️ 記録する", "💬 相談する"], label_visibility="collapsed")
+# ★修正点: アイコンを削除し、テキストのみに変更
+menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
 
-if "🖊️" in menu:
+if menu == "記録する":
     
     # カード風コンテナで記録フォームを囲む
     with st.container():
@@ -375,7 +397,7 @@ if "🖊️" in menu:
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-elif "💬" in menu:
+elif menu == "相談する":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("AIに相談する")
@@ -431,7 +453,7 @@ elif "💬" in menu:
         if prompt_to_send:
             with st.spinner("AIがアドバイスを生成中です..."):
                 advice = get_advice_from_gemini(prompt_to_send)
-                with st.chat_message("ai", avatar="🥗"):
+                with st.chat_message("ai", avatar="🧑‍⚕️"):
                     st.markdown(advice)
         
         st.markdown('</div>', unsafe_allow_html=True)
