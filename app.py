@@ -17,59 +17,84 @@ st.set_page_config(
 # --- デザインをカスタマイズするためのCSS ---
 st.markdown("""
 <style>
-    /* 全体のフォントと背景色 */
-    body {
-        font-family: 'Helvetica Neue', 'Arial', sans-serif;
+    /* 基本設定 */
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+    html, body, [class*="st-"] {
+        font-family: 'Noto Sans JP', sans-serif;
     }
     .stApp {
         background-color: #F0F2F6;
     }
 
-    /* カード風コンテナのスタイル */
+    /* メインタイトル */
+    h1 {
+        color: #1E293B; /* ダークグレイ */
+    }
+
+    /* カード風コンテナ */
     .card {
         background-color: white;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 25px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         margin-bottom: 20px;
     }
 
-    /* Streamlitの主要コンポーネントのスタイル上書き */
+    /* ボタン */
     .stButton>button {
         border-radius: 8px;
         border: none;
         padding: 10px 20px;
-        background-color: #4A90E2;
+        font-weight: 500;
+        background-color: #4A90E2; /* プライマリブルー */
         color: white;
-        transition: background-color 0.3s;
+        transition: background-color 0.2s, transform 0.2s;
     }
     .stButton>button:hover {
         background-color: #357ABD;
+        transform: scale(1.02);
+    }
+    .stButton>button:active {
+        transform: scale(0.98);
     }
     
-    /* 削除ボタンのスタイル */
+    /* 削除ボタン */
     .stButton>button[kind="primary"] {
-        background-color: #D0021B;
+        background-color: #D9534F; /* ソフトレッド */
     }
-     .stButton>button[kind="primary"]:hover {
-        background-color: #A00115;
+    .stButton>button[kind="primary"]:hover {
+        background-color: #C9302C;
     }
 
-    /* タブのスタイル */
+    /* 入力ウィジェット */
+    .stTextInput>div>div>input, .stDateInput>div>div>input, .stSelectbox>div>div {
+        background-color: #F8F9FA;
+        border-radius: 8px;
+        border: 1px solid #DEE2E6;
+    }
+
+    /* タブ */
     .stTabs [data-baseweb="tab-list"] {
-		gap: 24px;
+        gap: 24px;
+        border-bottom: 2px solid #DEE2E6;
 	}
     .stTabs [data-baseweb="tab"] {
-		height: 50px;
-        white-space: pre-wrap;
-		background-color: transparent;
-		border-radius: 4px 4px 0px 0px;
-		gap: 1px;
-		padding-top: 10px;
-		padding-bottom: 10px;
+        padding: 10px 16px;
+        background-color: transparent;
+        border-radius: 8px 8px 0 0;
+        font-weight: 500;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #F0F2F6;
+        border-bottom: 2px solid #4A90E2;
+        color: #4A90E2;
+    }
+
+    /* チャットメッセージ */
+    [data-testid="stChatMessage"] {
+        background-color: #FFFFFF;
+        border-radius: 10px;
+        padding: 16px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
 
 </style>
@@ -287,6 +312,7 @@ if "🖊️" in menu:
                         
                         if st.form_submit_button("この内容で食事を記録する"):
                             if food_name:
+                                # ★バグ修正: 編集された値を正しく取得
                                 nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates, 'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid}
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
