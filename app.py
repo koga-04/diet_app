@@ -22,7 +22,7 @@ st.markdown("""
     
     html, body, [class*="st-"], [class*="css-"] {
         font-family: 'Noto Sans JP', sans-serif;
-        color: #333; /* 基本の文字色を濃いグレーに */
+        color: #333;
     }
 
     /* Streamlitのメイン背景色 */
@@ -30,13 +30,21 @@ st.markdown("""
         background-color: #F0F2F6;
     }
 
+    /* ★修正点: サイドバーの不要な要素を非表示 */
+    button[data-testid="baseButton-header"] {
+        display: none;
+    }
+    .st-emotion-cache-10y5sf6 {
+        display: none;
+    }
+
     /* メインタイトル */
     h1 {
-        color: #1E293B; /* ダークグレイ */
+        color: #1E293B;
         font-weight: 700;
     }
     h2, h3, h4, h5, h6 {
-        color: #334155; /* やや濃いグレー */
+        color: #334155;
     }
 
     /* カード風コンテナ */
@@ -54,7 +62,7 @@ st.markdown("""
         border: none;
         padding: 10px 20px;
         font-weight: 500;
-        background-color: #0068D9; /* 明るい青 */
+        background-color: #0068D9;
         color: white;
         transition: background-color 0.2s, transform 0.2s;
     }
@@ -68,7 +76,7 @@ st.markdown("""
     
     /* 削除ボタン */
     .stButton>button[kind="primary"] {
-        background-color: #E53E3E; /* 赤 */
+        background-color: #E53E3E;
     }
     .stButton>button[kind="primary"]:hover {
         background-color: #C53030;
@@ -85,7 +93,7 @@ st.markdown("""
         color: #333 !important;
     }
     
-    /* ★修正点: Selectboxのドロップダウンメニューのスタイル */
+    /* Selectboxのドロップダウンメニューのスタイル */
     [data-baseweb="popover"] ul {
         background-color: #FFFFFF;
         border-radius: 8px;
@@ -103,7 +111,6 @@ st.markdown("""
         background-color: #0068D9;
         color: white !important;
     }
-
 
     /* タブ */
     .stTabs [data-baseweb="tab-list"] {
@@ -261,15 +268,13 @@ def get_advice_from_gemini(prompt):
 # --- アプリのメイン処理 ---
 init_db()
 
-# ★修正点: 絵文字を削除
 st.title("食生活アドバイザー")
+st.write("日々の食事やサプリを記録し、AIからパーソナルなアドバイスを受けましょう。")
 
-# ★修正点: アイコンを削除し、テキストのみに変更
 menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
 
 if menu == "記録する":
     
-    # カード風コンテナで記録フォームを囲む
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("今日の記録")
@@ -280,7 +285,6 @@ if menu == "記録する":
         )
         record_date = st.date_input("日付", datetime.date.today())
 
-        # --- フォーム定義 ---
         if meal_type == "サプリ":
             with st.form(key="supplement_form", clear_on_submit=True):
                 supplements = {
@@ -453,7 +457,8 @@ elif menu == "相談する":
         if prompt_to_send:
             with st.spinner("AIがアドバイスを生成中です..."):
                 advice = get_advice_from_gemini(prompt_to_send)
-                with st.chat_message("ai", avatar="🧑‍⚕️"):
+                # ★修正点: アバターを変更
+                with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         
         st.markdown('</div>', unsafe_allow_html=True)
