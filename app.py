@@ -249,7 +249,7 @@ def analyze_image_with_gemini(image_bytes):
 
 
 def get_advice_from_gemini(prompt):
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     try:
         response = model.generate_content(prompt)
         return response.text
@@ -280,7 +280,7 @@ def _nl_to_plan(question: str) -> dict:
 }
 """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""ユーザーの質問:
 {question}
 
@@ -752,3 +752,4 @@ elif menu == "相談する":
                     st.markdown(advice)
 
         st.markdown('</div>', unsafe_allow_html=True)
+
