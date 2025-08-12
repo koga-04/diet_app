@@ -33,7 +33,7 @@ st.markdown(
     --primary-600: #2563EB;
     --primary-700: #1D4ED8;
     --warn: #EF4444;
-    --radius: 16px;
+    --radius: 12px;
   }
 
   html, body, [class*="st-"], [class*="css-"] {
@@ -43,45 +43,42 @@ st.markdown(
   .stApp { background: var(--bg); }
 
   /* ===== Hero ===== */
-  .hero { background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10)); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; margin: 8px 0 18px 0; }
+  .hero { background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10)); border: 1px solid var(--border); border-radius: 16px; padding: 24px 28px; margin: 8px 0 18px 0; }
   .hero-title { font-size: 28px; font-weight: 700; letter-spacing: .2px; }
   .hero-sub { color: var(--muted); margin-top: 6px; }
 
   /* ===== Card ===== */
-  .card { background: var(--panel); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; box-shadow: 0 8px 28px rgba(17,24,39,0.06); margin-bottom: 18px; }
+  .card { background: var(--panel); border-radius: 16px; border: 1px solid var(--border); padding: 24px; box-shadow: 0 8px 28px rgba(17,24,39,0.06); margin-bottom: 18px; }
 
-  /* ===== Buttons (clean) ===== */
-  .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; transition: background .12s ease-in-out; box-shadow:none !important; }
+  /* ===== Buttons (simple) ===== */
+  .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; box-shadow:none !important; }
   .stButton>button:hover { background: var(--primary-600) !important; }
   .stButton>button:active { transform: none; }
-  .stButton>button[kind="secondary"] { background: #fff !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
-  .stButton>button[kind="secondary"]:hover { background: #F3F4F6 !important; }
-  .danger>button { background: var(--warn) !important; }
-  .danger>button:hover { background: #DC2626 !important; }
 
-  /* ===== Inputs: match Selectbox look (no fancy shadows) ===== */
+  /* ===== Inputs: make all identical to Selectbox ===== */
+  /* Outer wrapper provides border & radius */
   .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div {
     background:#FFFFFF !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:none !important; overflow:hidden !important;
   }
+  /* Inner input areas are flat */
   .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div {
     background:#FFFFFF !important; border:none !important; border-radius:0 !important; box-shadow:none !important; color: var(--text) !important;
   }
-  /* focus: border color only */
+  /* Remove any dark corners/shadows from nested elements */
+  .stDateInput>div>div, .stDateInput>div>div * { box-shadow:none !important; }
+  .stDateInput *::before, .stDateInput *::after { box-shadow:none !important; background:transparent !important; }
+  /* Match height/padding with Selectbox */
+  .stDateInput>div, .stTextInput>div, .stNumberInput>div, .stSelectbox>div { min-height:44px; }
+  .stDateInput input { height:42px !important; padding:0 12px !important; }
+  .stTextInput input, .stNumberInput input { padding: 10px 12px !important; }
+  /* Focus: border color only */
   .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within {
     border-color: var(--primary) !important; box-shadow:none !important;
   }
 
-  /* NumberInput steppers: light & readable */
-  .stNumberInput [data-baseweb="button"],
-  .stNumberInput [data-baseweb="button"] * { background: transparent !important; color: #374151 !important; fill: #374151 !important; border:none !important; }
+  /* NumberInput steppers: readable */
+  .stNumberInput [data-baseweb="button"], .stNumberInput [data-baseweb="button"] * { background: transparent !important; color: #374151 !important; fill: #374151 !important; border:none !important; }
   .stNumberInput [data-baseweb="button"]:hover { background:#F3F4F6 !important; }
-  .stNumberInput [data-baseweb="input"],
-  .stNumberInput [data-baseweb="base-input"] { background: transparent !important; }
-
-  /* DateInput internals */
-  .stDateInput [data-baseweb="input"],
-  .stDateInput [data-baseweb="base-input"] { background: transparent !important; }
-  .stDateInput svg { color: var(--muted) !important; fill: currentColor !important; }
 
   /* ===== Tabs ===== */
   .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
@@ -91,7 +88,7 @@ st.markdown(
   /* ===== Sidebar ===== */
   [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--border); }
 
-  /* ===== Datepicker / Popover (force full light) ===== */
+  /* ===== Datepicker / Popover (full light) ===== */
   [data-baseweb="popover"] { background: #FFFFFF !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
   [data-baseweb="popover"] * { background:#FFFFFF !important; color: var(--text) !important; }
   [role="dialog"], [data-baseweb="datepicker"], [data-baseweb="calendar"] { background: #FFFFFF !important; color: var(--text) !important; }
@@ -103,9 +100,8 @@ st.markdown(
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
-  /* ===== Misc / accessibility ===== */
-  /* hide stray keyboard-shortcuts bubble if it appears */
-  [aria-label*="Keyboard"], [title*="Keyboard"], [data-testid="stKeyboardShortcuts"] { display:none !important; }
+  /* ===== Hide keyboard shortcut / stray icons in header ===== */
+  [data-testid="stToolbar"], [data-testid="stHeader"], [aria-label*="Keyboard"], [title*="Keyboard"], [class*="keyboard_double"], [data-testid="stSidebarNavCollapseButton"] { display:none !important; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
