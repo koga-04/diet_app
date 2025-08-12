@@ -1007,3 +1007,4 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
+"
