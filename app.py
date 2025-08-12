@@ -33,7 +33,6 @@ st.markdown(
     --primary-600: #2563EB;
     --primary-700: #1D4ED8;
     --warn: #EF4444;
-    --ok: #10B981;
     --radius: 16px;
   }
 
@@ -41,56 +40,72 @@ st.markdown(
     font-family: 'Noto Sans JP', system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
     color: var(--text);
   }
-
   .stApp { background: var(--bg); }
 
-  /* Hero */
+  /* ===== Hero ===== */
   .hero { background: linear-gradient(135deg, rgba(59,130,246,.10), rgba(34,211,238,.10)); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px 28px; margin: 8px 0 18px 0; }
   .hero-title { font-size: 28px; font-weight: 700; letter-spacing: .2px; }
   .hero-sub { color: var(--muted); margin-top: 6px; }
 
-  /* Card */
+  /* ===== Card ===== */
   .card { background: var(--panel); border-radius: var(--radius); border: 1px solid var(--border); padding: 24px; box-shadow: 0 8px 28px rgba(17,24,39,0.06); margin-bottom: 18px; }
 
-  /* Buttons */
-  .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; transition: all .15s ease-in-out; }
-  .stButton>button:hover { background: var(--primary-600) !important; transform: translateY(-1px); }
-  .stButton>button:active { transform: translateY(0); }
+  /* ===== Buttons (clean) ===== */
+  .stButton>button { border-radius: 10px; border: 1px solid transparent !important; padding: .7rem 1.1rem; font-weight: 600; background: var(--primary) !important; color: #fff !important; transition: background .12s ease-in-out; box-shadow:none !important; }
+  .stButton>button:hover { background: var(--primary-600) !important; }
+  .stButton>button:active { transform: none; }
   .stButton>button[kind="secondary"] { background: #fff !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
   .stButton>button[kind="secondary"]:hover { background: #F3F4F6 !important; }
   .danger>button { background: var(--warn) !important; }
   .danger>button:hover { background: #DC2626 !important; }
 
-  /* Inputs (clean corners: no dark caps; unify look) */
-  .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div { background:#FFFFFF !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:none !important; }
-  .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div { background:#FFFFFF !important; border:none !important; border-radius:12px !important; box-shadow:none !important; color: var(--text) !important; }
-  .stTextInput input:focus, .stNumberInput input:focus, .stDateInput input:focus, .stSelectbox>div>div:focus { outline:none !important; border:none !important; box-shadow:0 0 0 4px rgba(59,130,246,.15) !important; }
+  /* ===== Inputs: match Selectbox look (no fancy shadows) ===== */
+  .stTextInput>div, .stNumberInput>div, .stDateInput>div, .stSelectbox>div {
+    background:#FFFFFF !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:none !important; overflow:hidden !important;
+  }
+  .stTextInput input, .stNumberInput input, .stDateInput input, .stSelectbox>div>div {
+    background:#FFFFFF !important; border:none !important; border-radius:0 !important; box-shadow:none !important; color: var(--text) !important;
+  }
+  /* focus: border color only */
+  .stTextInput>div:focus-within, .stNumberInput>div:focus-within, .stDateInput>div:focus-within, .stSelectbox>div:focus-within {
+    border-color: var(--primary) !important; box-shadow:none !important;
+  }
 
-  /* NumberInput stepper (make + / - visible & light) */
-  .stNumberInput button, .stNumberInput [role="button"] { background: transparent !important; color: var(--text) !important; border: none !important; box-shadow:none !important; }
-  .stNumberInput button:hover { background:#F3F4F6 !important; }
-  .stNumberInput svg { fill: currentColor !important; color: var(--text) !important; }
-  .stNumberInput>div>div { background: transparent !important; box-shadow:none !important; }
+  /* NumberInput steppers: light & readable */
+  .stNumberInput [data-baseweb="button"],
+  .stNumberInput [data-baseweb="button"] * { background: transparent !important; color: #374151 !important; fill: #374151 !important; border:none !important; }
+  .stNumberInput [data-baseweb="button"]:hover { background:#F3F4F6 !important; }
+  .stNumberInput [data-baseweb="input"],
+  .stNumberInput [data-baseweb="base-input"] { background: transparent !important; }
 
-  /* DateInput icon */
+  /* DateInput internals */
+  .stDateInput [data-baseweb="input"],
+  .stDateInput [data-baseweb="base-input"] { background: transparent !important; }
   .stDateInput svg { color: var(--muted) !important; fill: currentColor !important; }
 
-  /* Tabs */
+  /* ===== Tabs ===== */
   .stTabs [data-baseweb="tab-list"] { gap: 18px; border-bottom: 1px solid var(--border); }
   .stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--muted); }
   .stTabs [aria-selected="true"] { color: var(--primary); border-bottom: 2px solid var(--primary); }
 
-  /* Sidebar */
+  /* ===== Sidebar ===== */
   [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--border); }
 
-  /* Datepicker / Popover (force full light theme) */
+  /* ===== Datepicker / Popover (force full light) ===== */
   [data-baseweb="popover"] { background: #FFFFFF !important; color: var(--text) !important; border: 1px solid var(--border) !important; }
   [data-baseweb="popover"] * { background:#FFFFFF !important; color: var(--text) !important; }
   [role="dialog"], [data-baseweb="datepicker"], [data-baseweb="calendar"] { background: #FFFFFF !important; color: var(--text) !important; }
-  /* weekday header & month bar */
-  [data-baseweb="calendar"] [role="row"] [role="columnheader"] { color: #374151 !important; font-weight: 600; }
+  /* Header rows (month / weekday) */
+  [data-baseweb="calendar"] [role="row"] [role="columnheader"],
+  [data-baseweb="calendar"] [role="heading"],
+  [data-baseweb="datepicker"] [class*="header"],
+  [data-baseweb="datepicker"] [class*="Header"] { background:#FFFFFF !important; color:#111827 !important; }
   [data-baseweb="calendar"] [aria-selected="true"] { background: var(--primary) !important; color: #fff !important; border-radius: 8px; }
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
+
+  /* ===== Misc / accessibility ===== */
+  /* hide stray keyboard-shortcuts bubble if it appears */
+  [aria-label*="Keyboard"], [title*="Keyboard"], [data-testid="stKeyboardShortcuts"] { display:none !important; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
