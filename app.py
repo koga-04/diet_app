@@ -985,7 +985,6 @@ prompt_full = f"""
 
 記録データに即した網羅的な分析レポートを出力してください。
 """
-                        )
 
         if prompt_to_send:
             with st.spinner("AIがアドバイスを生成中です..."):
