@@ -101,8 +101,9 @@ st.markdown(
   [data-baseweb="calendar"] [aria-disabled="true"] { color: #9CA3AF !important; }
 
   /* ===== Sidebar collapse: hide raw text; keep button visible ===== */
-  [data-testid="stSidebarNavCollapseButton"], [data-testid="stSidebarNavCollapseButton"] * { font-size:0 !important; color:transparent !important; }
-  [data-testid="stSidebarNavCollapseButton"] { width:28px !important; height:28px !important; overflow:hidden !important; }
+  [data-testid="stSidebarNavCollapseButton"] span { visibility:hidden !important; }
+  [data-testid="stSidebarNavCollapseButton"] { position:relative; width:28px !important; height:28px !important; }
+  [data-testid="stSidebarNavCollapseButton"]::after { content:'≡'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; color:#6B7280; }
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
@@ -704,7 +705,7 @@ elif menu == "相談する":
 参考情報（出力に含めない）:
 {user_profile}
 """
-prompt_to_send = ""
+        prompt_to_send = ""
 
         tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
 
