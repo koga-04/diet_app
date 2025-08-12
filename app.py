@@ -19,9 +19,13 @@ st.markdown("""
 <style>
     /* 基本設定 */
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
-    html, body, [class*="st-"] {
+    
+    html, body, [class*="st-"], [class*="css-"] {
         font-family: 'Noto Sans JP', sans-serif;
+        color: #333; /* 基本の文字色を濃いグレーに */
     }
+
+    /* Streamlitのメイン背景色 */
     .stApp {
         background-color: #F0F2F6;
     }
@@ -29,11 +33,15 @@ st.markdown("""
     /* メインタイトル */
     h1 {
         color: #1E293B; /* ダークグレイ */
+        font-weight: 700;
+    }
+    h2, h3, h4, h5, h6 {
+        color: #334155; /* やや濃いグレー */
     }
 
     /* カード風コンテナ */
     .card {
-        background-color: white;
+        background-color: #FFFFFF;
         border-radius: 12px;
         padding: 25px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
@@ -46,12 +54,12 @@ st.markdown("""
         border: none;
         padding: 10px 20px;
         font-weight: 500;
-        background-color: #4A90E2; /* プライマリブルー */
+        background-color: #0068D9; /* 明るい青 */
         color: white;
         transition: background-color 0.2s, transform 0.2s;
     }
     .stButton>button:hover {
-        background-color: #357ABD;
+        background-color: #0055B3;
         transform: scale(1.02);
     }
     .stButton>button:active {
@@ -60,41 +68,52 @@ st.markdown("""
     
     /* 削除ボタン */
     .stButton>button[kind="primary"] {
-        background-color: #D9534F; /* ソフトレッド */
+        background-color: #E53E3E; /* 赤 */
     }
     .stButton>button[kind="primary"]:hover {
-        background-color: #C9302C;
+        background-color: #C53030;
     }
 
-    /* 入力ウィジェット */
-    .stTextInput>div>div>input, .stDateInput>div>div>input, .stSelectbox>div>div {
-        background-color: #F8F9FA;
-        border-radius: 8px;
-        border: 1px solid #DEE2E6;
+    /* 入力ウィジェットの背景とボーダーを無効化してシンプルに */
+    .stTextInput>div>div>input, 
+    .stDateInput>div>div>input, 
+    .stSelectbox>div>div,
+    .stNumberInput>div>div>input {
+        background-color: #FFFFFF !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 8px !important;
+        color: #333 !important;
     }
 
     /* タブ */
     .stTabs [data-baseweb="tab-list"] {
         gap: 24px;
-        border-bottom: 2px solid #DEE2E6;
+        border-bottom: 2px solid #E2E8F0;
 	}
     .stTabs [data-baseweb="tab"] {
         padding: 10px 16px;
         background-color: transparent;
         border-radius: 8px 8px 0 0;
         font-weight: 500;
+        color: #64748B;
     }
     .stTabs [aria-selected="true"] {
-        border-bottom: 2px solid #4A90E2;
-        color: #4A90E2;
+        border-bottom: 2px solid #0068D9;
+        color: #0068D9;
     }
 
     /* チャットメッセージ */
     [data-testid="stChatMessage"] {
-        background-color: #FFFFFF;
+        background-color: #F8F9FA;
+        border: 1px solid #E2E8F0;
         border-radius: 10px;
         padding: 16px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    /* サイドバー */
+    [data-testid="stSidebar"] {
+        background-color: #FFFFFF;
+        border-right: 1px solid #E2E8F0;
     }
 
 </style>
@@ -312,7 +331,6 @@ if "🖊️" in menu:
                         
                         if st.form_submit_button("この内容で食事を記録する"):
                             if food_name:
-                                # ★バグ修正: 編集された値を正しく取得
                                 nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates, 'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid}
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
