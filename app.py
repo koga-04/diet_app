@@ -419,10 +419,11 @@ JSONのみを返してください（説明不要・コードフェンス不要�
   "intent": "日本語での簡単な説明"
 }
 """
-    prompt = f"ユーザー質問: {question}
+    prompt = f"""ユーザー質問: {question}
 
 上記の制約でSQL JSONを返してください。
-{schema}"
+{schema}
+"""
     resp = model.generate_content(prompt)
     txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
     try:
