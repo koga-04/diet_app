@@ -341,7 +341,7 @@ def _answer_about_meal(food_name: str, nutrients: dict, question: str) -> str:
     context = f"""
 あなたは管理栄養士です。以下の食品とその推定栄養（1食あたり、食べた量でスケール済み）を踏まえて、ユーザーの質問に簡潔に答えてください。
 - 料理名: {food_name}
-- 栄養: calories={nutrients.get('calories',0)} kcal, protein={nutrients.get('protein',0)} g, carbs={nutrients.get('carbohydrates',0)} g, fat={nutrients.get('fat',0)} g, vitaminD={nutrients.get('vitaminD',0)} μg, salt={nutrients.get('salt',0)} g, zinc={nutrients.get('zinc',0)} mg, folic_acid={nutrients.get('folic_acid',0)} μg
+- 栄養: calories={nutrients.get('calories',0)} kcal, protein={nutrients.get('protein',0)} g, carbs={nutrients.get('carbohydrates',0)} g, fat={nutrients.get('fat',0)} g, vitaminD={nutrients.get('vitaminD',0)} μg, salt={nutrients.get('salt',0)} g, zinc={nutrients.get('zinc',0)} mg
 出力ルール:
 - 余計な前置きは不要
 - 2〜4行の箇条書きで要点のみ
@@ -715,7 +715,6 @@ if menu == "記録する":
                     vitamin_d = cols[0].number_input("ビタミンD (μg)", value=0.0, format="%.1f")
                     salt = cols[1].number_input("食塩相当量 (g)", value=0.0, format="%.1f")
                     zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
-                    folic_acid = cols[1].number_input("葉酸 (μg)", value=0.0, format="%.1f")
 
                     if st.form_submit_button("食事を記録する", use_container_width=True, type="primary"):
                         if food_name:
@@ -726,9 +725,7 @@ if menu == "記録する":
                                 "fat": fat,
                                 "vitaminD": vitamin_d,
                                 "salt": salt,
-                                "zinc": zinc,
-                                "folic_acid": folic_acid,
-                            }
+                                "zinc": zinc,                            }
                             add_record(record_date, meal_type, food_name, nutrients)
                             st.success(f"{food_name}を記録しました！")
                         else:
@@ -807,7 +804,6 @@ if menu == "記録する":
                         vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(scaled.get("vitaminD", 0.0)), format="%.1f")
                         salt = cols[1].number_input("食塩相当量 (g)", value=float(scaled.get("salt", 0.0)), format="%.1f")
                         zinc = cols[0].number_input("亜鉛 (mg)", value=float(scaled.get("zinc", 0.0)), format="%.1f")
-                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(scaled.get("folic_acid", 0.0)), format="%.1f")
 
                         if st.form_submit_button("この内容で食事を記録する", use_container_width=True, type="primary"):
                             if food_name:
@@ -818,9 +814,7 @@ if menu == "記録する":
                                     "fat": fat,
                                     "vitaminD": vitamin_d,
                                     "salt": salt,
-                                    "zinc": zinc,
-                                    "folic_acid": folic_acid,
-                                }
+                                    "zinc": zinc,                                }
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
                                 del st.session_state.analysis_result
@@ -940,13 +934,29 @@ elif menu == "相談する":
             - 苦手な食べ物: 生のトマト、納豆
             """
         )
-        base_prompt = f"""
+        prompt_qna = f"""
 あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
 出力ルール:
 - 挨拶・導入・締めの定型文は不要
 - 年齢・性別などの呼称を本文に含めない
 - 回答は必要な要点のみ（最大5項目の箇条書き中心）
 - 記録に基づく引用は最小限の数値のみ
+
+参考情報（出力に含めない）:
+{user_profile}
+"""
+
+prompt_full = f"""
+あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+出力はMarkdownで、次の構成を必ず含めてください:
+## 概要
+## 良かった点
+## 改善ポイント
+## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
+## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
+## 具体的アクションプラン（食事例3〜5・買い物リスト）
+## 次の7日間の目標
+注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
 
 参考情報（出力に含めない）:
 {user_profile}
@@ -961,7 +971,7 @@ elif menu == "相談する":
                 if question:
                     record_history = all_records_df.head(30).to_string(index=False)
                     prompt_to_send = (
-                        f"{base_prompt}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
+                        f"{prompt_qna}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
                     )
                 else:
                     st.warning("相談内容を入力してください。")
@@ -970,7 +980,10 @@ elif menu == "相談する":
             st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
             if st.button("アドバイスをもらう", key="all_consult"):
                 record_history = all_records_df.to_string(index=False)
-                prompt_to_send = f"{base_prompt}# 全ての記録\n{record_history}\n\n上記の記録全体を評価し、総合的なアドバイスをしてください。"
+                prompt_to_send = f"{prompt_full}# 全ての記録
+{record_history}
+
+記録データに即した網羅的な分析レポートを出力してください。"
 
         with tab3:
             today = datetime.date.today()
@@ -988,7 +1001,7 @@ elif menu == "相談する":
                     else:
                         record_history = period_records_df.to_string(index=False)
                         prompt_to_send = (
-                            f"{base_prompt}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
+                            f"{prompt_qna}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
                         )
 
         if prompt_to_send:
