@@ -11,7 +11,8 @@ import io
 st.set_page_config(
     page_title="食生活アドバイザー",
     page_icon="💧",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # --- デザインをカスタマイズするためのCSS ---
@@ -30,11 +31,8 @@ st.markdown("""
         background-color: #F0F2F6;
     }
 
-    /* ★修正点: サイドバーの不要な要素を非表示 */
-    button[data-testid="baseButton-header"] {
-        display: none;
-    }
-    .st-emotion-cache-10y5sf6 {
+    /* ★修正点: サイドバーの折りたたみボタンを確実に非表示 */
+    [data-testid="stSidebarNavCollapseButton"] {
         display: none;
     }
 
@@ -42,6 +40,7 @@ st.markdown("""
     h1 {
         color: #1E293B;
         font-weight: 700;
+        padding-top: 1rem; /* タイトルの上の余白 */
     }
     h2, h3, h4, h5, h6 {
         color: #334155;
@@ -269,7 +268,8 @@ def get_advice_from_gemini(prompt):
 init_db()
 
 st.title("食生活アドバイザー")
-st.write("日々の食事やサプリを記録し、AIからパーソナルなアドバイスを受けましょう。")
+# ★修正点: st.writeを削除し、説明文をカード内に移動
+# st.write("日々の食事やサプリを記録し、AIからパーソナルなアドバイスを受けましょう。")
 
 menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
 
@@ -278,10 +278,12 @@ if menu == "記録する":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("今日の記録")
+        st.caption("日々の食事やサプリ、水分補給を記録しましょう。")
         
         meal_type = st.selectbox(
             "記録の種類",
-            ["朝食", "昼食", "夕食", "間食", "サプリ", "水分補給"]
+            ["朝食", "昼食", "夕食", "間食", "サプリ", "水分補給"],
+            label_visibility="collapsed"
         )
         record_date = st.date_input("日付", datetime.date.today())
 
@@ -457,7 +459,6 @@ elif menu == "相談する":
         if prompt_to_send:
             with st.spinner("AIがアドバイスを生成中です..."):
                 advice = get_advice_from_gemini(prompt_to_send)
-                # ★修正点: アバターを変更
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         
