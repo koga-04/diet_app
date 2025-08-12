@@ -273,7 +273,7 @@ def _nl_to_plan(question: str) -> dict:
   "name_contains": "任意のキーワード" | null,
   "metrics": ["calories","protein","carbohydrates","fat","vitamin_d","salt","zinc","folic_acid"],
   "agg": "sum|avg|count" | null,
-  "group_by": "date|meal_type" | null,
+  "group_by": "date|meal_type|food_name" | null,
   "top_n": 整数 | null,
   "sort_by": 指標名 | null,
   "sort_order": "desc|asc" | null
@@ -292,6 +292,31 @@ def _nl_to_plan(question: str) -> dict:
         return json.loads(txt)
     except Exception:
         return {}
+
+
+def _postprocess_plan(question: str, plan: dict) -> dict:
+    """質問文から相対日付や内訳リクエストを解釈し、計画を補正する。"""
+    pr = (plan or {}).copy()
+    q = (question or "")
+
+    # --- 相対日付の補正 ---
+    today = datetime.date.today()
+    if any(k in q for k in ["今日", "本日", "today"]):
+        ds = today.strftime("%Y-%m-%d")
+        pr["date_range"] = {"start": ds, "end": ds}
+    if any(k in q for k in ["昨日", "きのう", "yesterday"]):
+        d = today - datetime.timedelta(days=1)
+        ds = d.strftime("%Y-%m-%d")
+        pr["date_range"] = {"start": ds, "end": ds}
+
+    # --- "どの/内訳/どれくらい/食材" → 食品別の内訳を求めていると解釈 ---
+    if any(k in q for k in ["どの", "内訳", "どれくらい", "どれぐらい", "食材"]):
+        pr["action"] = "aggregate"
+        pr["group_by"] = "food_name"
+        pr.setdefault("agg", "sum")
+        pr.setdefault("metrics", ["protein"])  # 明示されてなければタンパク質
+
+    return pr
 
 
 def _execute_plan(df: pd.DataFrame, plan: dict):
@@ -340,7 +365,7 @@ def _execute_plan(df: pd.DataFrame, plan: dict):
         gb = pr.get("group_by")
         agg = pr.get("agg") or "sum"
         agg_map = {m: agg for m in metrics if m in work.columns}
-        if gb in ("date", "meal_type"):
+        if gb in ("date", "meal_type", "food_name"):
             out = work.groupby(gb).agg(agg_map).reset_index()
             if gb == "date":
                 out = out.sort_values("date")
@@ -362,6 +387,70 @@ def _execute_plan(df: pd.DataFrame, plan: dict):
     # default
     out = work[["date", "meal_type", "food_name"] + [c for c in metrics if c in work.columns]].sort_values("date", ascending=False)
     return out, f"{len(out)}件ヒット"
+
+# =============================
+# LLM-to-SQL (自由モード)
+# =============================
+
+ALLOWED_COLS = {"id","date","meal_type","food_name","calories","protein","carbohydrates","fat","vitamin_d","salt","zinc","folic_acid"}
+
+
+def llm_to_sql(question: str) -> dict:
+    """自然文から安全なSQL(JSON)を生成する。Gemini 2.5 Flash を使用。"""
+    today_jst = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().strftime("%Y-%m-%d")
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    schema = f"""
+あなたはSQLite用のSQLアシスタントです。次の制約を必ず守ってください:
+- SELECT文のみ。INSERT/UPDATE/DELETE/ALTER/DROP は禁止（セミコロン含む）。
+- FROM は必ず meals のみ。
+- 相対日付（今日/昨日/先週など）は日本時間({today_jst})基準で具体的なYYYY-MM-DDに解決。
+- 可能なら ? プレースホルダと params を使う。
+- 結果行は最大500行（LIMIT を付ける）。
+
+テーブル: meals(
+  id INTEGER, date TEXT(YYYY-MM-DD), meal_type TEXT, food_name TEXT,
+  calories REAL, protein REAL, carbohydrates REAL, fat REAL, vitamin_d REAL, salt REAL, zinc REAL, folic_acid REAL
+)
+
+JSONのみを返してください（説明不要・コードフェンス不要）:
+{
+  "sql": "SELECT ... FROM meals WHERE ... LIMIT 500",
+  "params": [],
+  "intent": "日本語での簡単な説明"
+}
+"""
+    prompt = f"ユーザー質問: {question}
+
+上記の制約でSQL JSONを返してください。
+{schema}"
+    resp = model.generate_content(prompt)
+    txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+    try:
+        return json.loads(txt)
+    except Exception:
+        return {"sql": "", "params": [], "intent": "parse_error"}
+
+
+def _safe_run_sql(sql: str, params: list):
+    """最低限のサニタイズを行ってからSQLを実行してDataFrameを返す。"""
+    if not sql:
+        raise ValueError("SQLが空です")
+    s = sql.strip().lower()
+    if not s.startswith("select"):
+        raise ValueError("SELECTのみ許可")
+    for bad in ["insert", "update", "delete", "drop", "alter", "attach", "pragma", ";"]:
+        if bad in s:
+            raise ValueError("禁止キーワードを検出しました")
+    if " from " not in s or "meals" not in s:
+        raise ValueError("FROM は meals のみ許可")
+    if " limit " not in s:
+        sql = sql.strip() + " LIMIT 500"
+    conn = get_db_connection()
+    try:
+        df = pd.read_sql_query(sql, conn, params=params or [])
+    finally:
+        conn.close()
+    return df
 
 # =============================
 # App
@@ -656,21 +745,36 @@ if menu == "記録する":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🧠 記録データに質問する")
-        st.caption("例：『先週のたんぱく質の合計』『今日の朝食』『水分補給の合計』『7/1~7/7のカロリー推移』など")
+        st.caption("例：『先週のたんぱく質の合計』『今日の朝食』『水分補給の合計』『7/1~7/7のカロリー推移』『今日のたんぱく質の内訳』など")
         q = st.text_input("質問", key="data_chat_q")
+        use_llm = st.toggle("自由モード（LLMにSQLを作らせる）", value=True, help="あいまい表現や内訳表現に強い。安全性ガードの上でSELECTのみ実行します。")
         if st.button("送信", key="data_chat_send"):
             if not q.strip():
                 st.warning("質問を入力してください。")
             else:
-                with st.spinner("解析中..."):
-                    plan = _nl_to_plan(q)
-                    out_df, summary = _execute_plan(all_records_df, plan)
-                st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
-                st.write(summary)
-                if not out_df.empty:
-                    st.dataframe(out_df, use_container_width=True)
+                if use_llm:
+                    try:
+                        with st.spinner("SQLを作成中..."):
+                            plan = llm_to_sql(q)
+                        st.caption(f"抽出方針(SQL): {json.dumps(plan, ensure_ascii=False)}")
+                        df = _safe_run_sql(plan.get("sql", ""), plan.get("params") or [])
+                        if df.empty:
+                            st.info("該当データがありません。質問の条件を少し変えてみてください。")
+                        else:
+                            st.dataframe(df, use_container_width=True)
+                    except Exception as e:
+                        st.error(f"実行エラー: {e}")
                 else:
-                    st.info("該当データがありません。キーワードや期間を変えてみてください。")
+                    with st.spinner("解析中..."):
+                        plan = _nl_to_plan(q)
+                        plan = _postprocess_plan(q, plan)
+                        out_df, summary = _execute_plan(all_records_df, plan)
+                    st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
+                    st.write(summary)
+                    if not out_df.empty:
+                        st.dataframe(out_df, use_container_width=True)
+                    else:
+                        st.info("該当データがありません。キーワードや期間を変えてみてください。")
         st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================
@@ -752,4 +856,3 @@ elif menu == "相談する":
                     st.markdown(advice)
 
         st.markdown('</div>', unsafe_allow_html=True)
-
