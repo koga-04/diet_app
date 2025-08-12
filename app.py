@@ -226,7 +226,8 @@ def get_advice_from_gemini(prompt: str) -> str:
         resp = model.generate_content(prompt)
         return (resp.text or "").strip()
     except Exception as e:
-        st.er
+        st.error(f"アドバイス生成中にエラーが発生しました: {e}")
+        return "アドバイスの生成に失敗しました。"
 
 def analyze_image_with_gemini(image_bytes):
     """画像を解析し、{ foodName, calories, nutrients{...} } を返す。
@@ -344,8 +345,7 @@ def _refine_by_note(food_name: str, nutrients: dict, note: str):
 """
     prompt_parts = [
         "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
-        "現在の推定: " + base_json + "
-補足: " + (note or ""),
+        "現在の推定: " + base_json + "\n補足: " + (note or ""),
         schema,
     ]
     try:
@@ -990,3 +990,4 @@ elif menu == "相談する":
 
         prompt_full = f"""
 あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+
