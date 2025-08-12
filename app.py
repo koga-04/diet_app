@@ -986,7 +986,7 @@ elif menu == "相談する":
 参考情報（出力に含めない）:
 {user_profile}
 """
-　　　　         prompt_full = f"""
+                prompt_full = f"""
 あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
 出力はMarkdownで、次の構成を必ず含めてください:
 ## 概要
@@ -1059,3 +1059,4 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
+
