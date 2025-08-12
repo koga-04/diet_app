@@ -255,9 +255,9 @@ def delete_exercise_record(record_id):
 # =============================
 
 def get_advice_from_gemini(prompt: str) -> str:
-    """テキストプロンプトからアドバイスを生成（gemini-1.5-flash-latest）。"""
+    """テキストプロンプトからアドバイスを生成（gemini-2.5-flash）。"""
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         resp = model.generate_content(prompt)
         return (resp.text or "").strip()
     except Exception as e:
@@ -266,7 +266,7 @@ def get_advice_from_gemini(prompt: str) -> str:
 
 def analyze_image_with_gemini(image_bytes):
     """画像を解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
-    model_candidates = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
+    model_candidates = ["gemini-2.5-flash", "gemini-2.5-pro"]
     image_pil = Image.open(io.BytesIO(image_bytes))
     prompt = (
         """
@@ -304,7 +304,7 @@ def analyze_image_with_gemini(image_bytes):
 
 def analyze_text_with_gemini(description: str):
     """フリーテキストを解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     prompt = (
         f"""
         あなたは栄養管理の専門家です。以下の食事内容の記述を分析してください。
@@ -395,7 +395,7 @@ def _parse_fraction_jp(text: str):
 
 def _refine_by_note(food_name: str, nutrients: dict, note: str):
     """補足説明を反映して、料理名/栄養値の上書き案を返す。失敗時は None。"""
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     base_json = json.dumps({"foodName": food_name, "nutrients": nutrients}, ensure_ascii=False)
     schema = """
 以下のJSONのみを返してください。説明不要。コードフェンス不要。
@@ -445,7 +445,7 @@ def _nl_to_plan(question: str) -> dict:
 }
 """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("gemini-2.5-flash")
         prompt = f"""ユーザーの質問:
 {question}
 
@@ -563,7 +563,7 @@ ALLOWED_COLS = {"id","date","meal_type","food_name","calories","protein","carboh
 def llm_to_sql(question: str) -> dict:
     """自然文から安全なSQL(JSON)を生成する。Gemini 2.5 Flash を使用。"""
     today_jst = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().strftime("%Y-%m-%d")
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("gemini-2.5-flash")
     schema_tmpl = """
 あなたはSQLite用のSQLアシスタントです。次の制約を必ず守ってください:
 - SELECT文のみ。INSERT/UPDATE/DELETE/ALTER/DROP は禁止（セミコロン含む）。
@@ -630,7 +630,6 @@ with st.sidebar:
     menu = st.radio("選択", ["食事記録", "運動記録", "相談する"], index=0, label_visibility="collapsed")
 
 # --- Dynamic Header ---
-# ★修正点: ページに応じてヘッダーの内容を変更
 if menu == "食事記録":
     title = "🍽️ 食事記録"
     subtitle = "日々の食事やサプリ・水分補給をシンプルに記録しましょう。"
@@ -990,14 +989,18 @@ elif menu == "相談する":
             st.warning("アドバイスには最低1件の記録が必要です。まずは食事か運動を記録してみましょう。")
             st.stop()
 
+        # ★改修要望2: ユーザー情報を更新
         user_profile = (
             """
             - 年齢: 35歳女性
+            - 身長: 153cm
+            - 体重: 50kg
             - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
             - 希望: アンチエイジング
             - 苦手な食べ物: 生のトマト、納豆
             """
         )
+        # ★改修要望1: プロンプトから「クライアント」を削除
         prompt_qna = f"""
 あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
 出力ルール:
@@ -1010,7 +1013,7 @@ elif menu == "相談する":
 {user_profile}
 """
         prompt_full = f"""
-あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。以下のユーザー情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
 出力はMarkdownで、次の構成を必ず含めてください:
 ## 概要
 ## 良かった点（食事・運動）
