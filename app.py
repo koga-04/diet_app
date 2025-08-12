@@ -11,8 +11,8 @@ import io
 # Page / Theme
 # =============================
 st.set_page_config(
-    page_title="食生活アドバイザー",
-    page_icon="🍳",
+    page_title="ウェルネスダイアリー",
+    page_icon="💪",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -137,6 +137,7 @@ def get_db_connection():
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
+    # 食事記録テーブル
     c.execute(
         """
         CREATE TABLE IF NOT EXISTS meals (
@@ -155,11 +156,22 @@ def init_db():
         )
         """
     )
+    # ★改修要望1: 運動記録テーブルを追加
+    c.execute(
+        """
+        CREATE TABLE IF NOT EXISTS exercises (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date TEXT NOT NULL,
+            exercise_name TEXT NOT NULL,
+            duration_minutes INTEGER NOT NULL
+        )
+        """
+    )
     conn.commit()
     conn.close()
 
 
-# CRUD helpers
+# CRUD helpers for Meals
 
 def add_record(date, meal_type, food_name, nutrients):
     conn = get_db_connection()
@@ -177,7 +189,6 @@ def add_record(date, meal_type, food_name, nutrients):
             nutrients.get("protein"),
             nutrients.get("carbohydrates"),
             nutrients.get("fat"),
-            # DB column is vitamin_d (snake); normalize here
             nutrients.get("vitaminD"),
             nutrients.get("salt"),
             nutrients.get("zinc"),
@@ -211,6 +222,30 @@ def delete_record(record_id):
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("DELETE FROM meals WHERE id = ?", (record_id,))
+    conn.commit()
+    conn.close()
+
+# ★改修要望1: CRUD helpers for Exercises
+def add_exercise_record(date, exercise_name, duration_minutes):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO exercises (date, exercise_name, duration_minutes) VALUES (?, ?, ?)",
+        (date.strftime("%Y-%m-%d"), exercise_name, duration_minutes)
+    )
+    conn.commit()
+    conn.close()
+
+def get_all_exercise_records():
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM exercises ORDER BY date DESC, id DESC", conn)
+    conn.close()
+    return df
+
+def delete_exercise_record(record_id):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM exercises WHERE id = ?", (record_id,))
     conn.commit()
     conn.close()
 
@@ -603,7 +638,8 @@ st.markdown(
 # --- Sidebar ---
 with st.sidebar:
     st.markdown("### メニュー")
-    menu = st.radio("選択", ["記録する", "相談する"], index=0, label_visibility="collapsed")
+    # ★改修要望1: サイドバーのメニュー名を変更・追加
+    menu = st.radio("選択", ["食事記録", "運動記録", "相談する"], index=0, label_visibility="collapsed")
 
 # --- Quick glance (today) ---
 all_df = get_all_records()
@@ -632,10 +668,10 @@ col4.metric("脂質", f"{sum_today['f']:.1f} g")
 # =============================
 # RECORD
 # =============================
-if menu == "記録する":
+if menu == "食事記録":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("今日の記録")
+        st.subheader("食事の記録")
         st.caption("食事・サプリ・水分補給を記録しましょう。")
 
         # type + date
@@ -743,7 +779,6 @@ if menu == "記録する":
                 
                 base_food = result.get("summary", "")
                 
-                # ★修正点: 内訳から合計を再計算
                 dishes = result.get("dishes", [])
                 recalculated_total = {}
                 if dishes:
@@ -827,7 +862,7 @@ if menu == "記録する":
     # ---- List ----
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("記録一覧")
+        st.subheader("食事記録一覧")
         all_records_df = get_all_records()
         if all_records_df.empty:
             st.info("まだ記録がありません。")
@@ -857,7 +892,6 @@ if menu == "記録する":
                 key="data_editor",
             )
 
-            # map back to original indices
             if edited_df["削除"].any():
                 btn_col1, btn_col2 = st.columns([1, 3])
                 with btn_col1:
@@ -870,40 +904,68 @@ if menu == "記録する":
                         st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ---- Data chat under list ----
+# ★改修要望1: 運動記録ページを新設
+elif menu == "運動記録":
     with st.container():
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("🧠 記録データに質問する")
-        st.caption("例：『先週のたんぱく質の合計』『今日の朝食』『水分補給の合計』『7/1~7/7のカロリー推移』『今日のたんぱく質の内訳』など")
-        q = st.text_input("質問", key="data_chat_q")
-        use_llm = st.toggle("自由モード（LLMにSQLを作らせる）", value=True, help="あいまい表現や内訳表現に強い。安全性ガードの上でSELECTのみ実行します。")
-        if st.button("送信", key="data_chat_send"):
-            if not q.strip():
-                st.warning("質問を入力してください。")
-            else:
-                if use_llm:
-                    try:
-                        with st.spinner("SQLを作成中..."):
-                            plan = llm_to_sql(q)
-                        st.caption(f"抽出方針(SQL): {json.dumps(plan, ensure_ascii=False)}")
-                        df = _safe_run_sql(plan.get("sql", ""), plan.get("params") or [])
-                        if df.empty:
-                            st.info("該当データがありません。質問の条件を少し変えてみてください。")
-                        else:
-                            st.dataframe(df, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"実行エラー: {e}")
+        st.subheader("運動の記録")
+        st.caption("日々の運動を記録して、活動量を管理しましょう。")
+        
+        with st.form(key="exercise_form", clear_on_submit=True):
+            ex_left, ex_right = st.columns([2,1])
+            with ex_left:
+                exercise_name = st.selectbox(
+                    "運動メニュー",
+                    ["ヨガ", "エアロビクス", "Group Centergy", "その他（自由入力）"]
+                )
+                if exercise_name == "その他（自由入力）":
+                    exercise_name = st.text_input("運動内容を入力", placeholder="例：ジムで筋トレ")
+            with ex_right:
+                duration = st.number_input("運動時間（分）", min_value=0, value=60, step=5)
+
+            record_date_ex = st.date_input("日付", datetime.date.today())
+
+            if st.form_submit_button("運動を記録する", use_container_width=True, type="primary"):
+                if exercise_name and duration > 0:
+                    add_exercise_record(record_date_ex, exercise_name, duration)
+                    st.success(f"{exercise_name} ({duration}分) を記録しました！")
                 else:
-                    with st.spinner("解析中..."):
-                        plan = _nl_to_plan(q)
-                        plan = _postprocess_plan(q, plan)
-                        out_df, summary = _execute_plan(all_records_df, plan)
-                    st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
-                    st.write(summary)
-                    if not out_df.empty:
-                        st.dataframe(out_df, use_container_width=True)
-                    else:
-                        st.info("該当データがありません。キーワードや期間を変えてみてください。")
+                    st.warning("運動内容と時間を入力してください。")
+        st.markdown('</div>', unsafe_allow_html=True)
+        
+    with st.container():
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("運動記録一覧")
+        all_exercise_df = get_all_exercise_records()
+        if all_exercise_df.empty:
+            st.info("まだ運動の記録がありません。")
+        else:
+            display_ex_df = all_exercise_df.copy()
+            display_ex_df["削除"] = [False] * len(display_ex_df)
+            
+            edited_ex_df = st.data_editor(
+                display_ex_df[["date", "exercise_name", "duration_minutes", "削除"]],
+                column_config={
+                    "date": "日付",
+                    "exercise_name": "運動内容",
+                    "duration_minutes": "時間(分)",
+                    "削除": st.column_config.CheckboxColumn("削除？"),
+                },
+                use_container_width=True,
+                hide_index=True,
+                key="ex_data_editor",
+            )
+
+            if edited_ex_df["削除"].any():
+                btn_col1, btn_col2 = st.columns([1, 3])
+                with btn_col1:
+                    if st.container().button("選択した記録を削除", type="primary", use_container_width=True, key="delete_ex"):
+                        ids_to_delete = edited_ex_df[edited_ex_df["削除"]].index
+                        original_ids = all_exercise_df.loc[ids_to_delete, "id"]
+                        for rid in original_ids:
+                            delete_exercise_record(int(rid))
+                        st.success("選択した記録を削除しました。")
+                        st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 # =============================
@@ -915,8 +977,10 @@ elif menu == "相談する":
         st.subheader("AIに相談する")
 
         all_records_df = get_all_records()
-        if all_records_df.empty:
-            st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
+        all_exercise_df = get_all_exercise_records()
+
+        if all_records_df.empty and all_exercise_df.empty:
+            st.warning("アドバイスには最低1件の記録が必要です。まずは食事か運動を記録してみましょう。")
             st.stop()
 
         user_profile = (
@@ -927,8 +991,9 @@ elif menu == "相談する":
             - 苦手な食べ物: 生のトマト、納豆
             """
         )
+        # ★改修要望1: プロンプトに運動記録のセクションを追加
         prompt_qna = f"""
-あなたは経験豊富な食生活アドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
+あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。ユーザーの問いに対してのみ簡潔に回答してください。
 出力ルール:
 - 挨拶・導入・締めの定型文は不要
 - 年齢・性別などの呼称を本文に含めない
@@ -939,14 +1004,14 @@ elif menu == "相談する":
 {user_profile}
 """
         prompt_full = f"""
-あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
+あなたは経験豊富な食生活と運動のパーソナルアドバイザーです。以下のクライアント情報と記録に基づき、**包括的な分析レポート**を日本語で作成してください。
 出力はMarkdownで、次の構成を必ず含めてください:
 ## 概要
-## 良かった点
-## 改善ポイント
-## 栄養・摂取傾向（カロリー/たんぱく質/炭水化物/脂質/ビタミンD/食塩/亜鉛）
-## パターン分析（食事回数・時間帯・朝/昼/夜の偏り）
-## 具体的アクションプラン（食事例3〜5・買い物リスト）
+## 良かった点（食事・運動）
+## 改善ポイント（食事・運動）
+## 栄養・摂取傾向
+## 運動の傾向（頻度・時間）
+## 具体的アクションプラン（食事と運動の組み合わせ提案）
 ## 次の7日間の目標
 注意: 挨拶や呼称は不要。必要な数値のみ簡潔に引用。
 
@@ -959,12 +1024,15 @@ elif menu == "相談する":
         tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
 
         with tab1:
-            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
+            question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事や運動で改善できますか？")
             if st.button("AIに相談する", key="text_consult"):
                 if question:
                     record_history = all_records_df.head(30).to_string(index=False)
-                    prompt_to_send = f"""{prompt_qna}# 記録（参考）
+                    exercise_history = all_exercise_df.head(15).to_string(index=False)
+                    prompt_to_send = f"""{prompt_qna}# 食事記録（参考）
 {record_history}
+# 運動記録（参考）
+{exercise_history}
 
 # 相談内容
 {question}
@@ -978,8 +1046,11 @@ elif menu == "相談する":
             st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
             if st.button("アドバイスをもらう", key="all_consult"):
                 record_history = all_records_df.to_string(index=False)
-                prompt_to_send = f"""{prompt_full}# 全ての記録
+                exercise_history = all_exercise_df.to_string(index=False)
+                prompt_to_send = f"""{prompt_full}# 全ての食事記録
 {record_history}
+# 全ての運動記録
+{exercise_history}
 
 記録データに即した網羅的な分析レポートを出力してください。
 """
@@ -995,12 +1066,19 @@ elif menu == "相談する":
                     st.error("終了日は開始日以降に設定してください。")
                 else:
                     period_records_df = get_records_by_period(start_date, end_date)
-                    if period_records_df.empty:
+                    period_exercise_df = get_all_exercise_records() # Simple filter for now
+                    period_exercise_df['date'] = pd.to_datetime(period_exercise_df['date'])
+                    period_exercise_df = period_exercise_df[(period_exercise_df['date'] >= pd.to_datetime(start_date)) & (period_exercise_df['date'] <= pd.to_datetime(end_date))]
+                    
+                    if period_records_df.empty and period_exercise_df.empty:
                         st.warning("指定された期間に記録がありません。")
                     else:
                         record_history = period_records_df.to_string(index=False)
-                        prompt_to_send = f"""{prompt_full}# 記録 ({start_date} ~ {end_date})
+                        exercise_history = period_exercise_df.to_string(index=False)
+                        prompt_to_send = f"""{prompt_full}# 食事記録 ({start_date} ~ {end_date})
 {record_history}
+# 運動記録 ({start_date} ~ {end_date})
+{exercise_history}
 
 上記の指定期間の記録を評価し、アドバイスをしてください。
 """
