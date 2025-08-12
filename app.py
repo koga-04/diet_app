@@ -8,6 +8,7 @@ from PIL import Image
 import io
 
 # --- ページ設定 ---
+# ★修正点: Streamlitのテーマ設定をここで行うことで、安定したデザインを実現
 st.set_page_config(
     page_title="食生活アドバイザー",
     page_icon="💧",
@@ -16,110 +17,25 @@ st.set_page_config(
 )
 
 # --- ★修正点: app.py内で完結する、全面的に書き直したCSS ---
+# カードスタイルや微調整のみにCSSを限定し、基本デザインはテーマ設定に任せる
 st.markdown("""
 <style>
-    /* 基本設定 */
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
     
     html, body, [class*="st-"], [class*="css-"] {
         font-family: 'Noto Sans JP', sans-serif;
     }
 
-    /* Streamlitのメイン背景色 */
-    .stApp {
-        background-color: #F8F9FA; /* より明るいグレー */
-    }
-
-    /* サイドバーの折りたたみボタンと不要な要素を確実に非表示 */
-    [data-testid="stSidebarNavCollapseButton"], .st-emotion-cache-10y5sf6 {
-        display: none;
-    }
-
-    /* メインタイトル */
-    h1 {
-        color: #212529;
-        font-weight: 700;
-        padding-top: 1rem;
-    }
-    h2, h3, h4, h5, h6 {
-        color: #343A40;
-    }
-
     /* カード風コンテナ */
     .card {
         background-color: #FFFFFF;
-        border-radius: 16px; /* 角をより丸く */
+        border-radius: 16px;
         padding: 2rem;
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.05);
         border: 1px solid #E9ECEF;
         margin-bottom: 2rem;
     }
-
-    /* ボタン */
-    .stButton>button {
-        border-radius: 8px;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        font-weight: 500;
-        background-color: #4F46E5; /* 参考デザインのインディゴブルー */
-        color: white;
-        transition: all 0.2s ease-in-out;
-    }
-    .stButton>button:hover {
-        background-color: #4338CA;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    }
-    .stButton>button:active {
-        transform: translateY(0);
-    }
     
-    /* 削除ボタン */
-    .stButton>button[kind="primary"] {
-        background-color: #DC3545;
-    }
-    .stButton>button[kind="primary"]:hover {
-        background-color: #C82333;
-    }
-
-    /* 入力ウィジェット */
-    .stTextInput>div>div>input, 
-    .stDateInput>div>div>input, 
-    .stSelectbox>div>div,
-    .stNumberInput>div>div>input {
-        background-color: #F8F9FA !important;
-        border: 1px solid #CED4DA !important;
-        border-radius: 8px !important;
-        box-shadow: none;
-    }
-    
-    /* Selectboxのドロップダウンメニューのスタイル */
-    [data-baseweb="popover"] ul {
-        background-color: #FFFFFF;
-        border-radius: 8px;
-        border: 1px solid #DEE2E6;
-    }
-    [data-baseweb="popover"] ul li:hover {
-        background-color: #F1F3F5;
-    }
-
-    /* タブ */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 2rem;
-        border-bottom: 2px solid #E9ECEF;
-	}
-    .stTabs [data-baseweb="tab"] {
-        padding: 1rem 0.5rem;
-        background-color: transparent;
-        font-weight: 500;
-        color: #6C757D;
-        border-bottom: 2px solid transparent;
-    }
-    .stTabs [aria-selected="true"] {
-        border-bottom: 2px solid #4F46E5;
-        color: #4F46E5;
-    }
-
     /* チャットメッセージ */
     [data-testid="stChatMessage"] {
         background-color: #F8F9FA;
@@ -127,13 +43,6 @@ st.markdown("""
         border-radius: 12px;
         padding: 1.5rem;
     }
-    
-    /* サイドバー */
-    [data-testid="stSidebar"] {
-        background-color: #FFFFFF;
-        border-right: 1px solid #DEE2E6;
-    }
-
 </style>
 """, unsafe_allow_html=True)
 
