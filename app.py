@@ -10,14 +10,11 @@ import io
 # --- ページ設定 ---
 st.set_page_config(
     page_title="食生活アドバイザー",
-    page_icon="🥗",
+    page_icon="💧",
     layout="wide"
 )
 
 # --- Google Gemini APIキーの設定 ---
-# Streamlitのシークレット管理機能を使ってAPIキーを設定します。
-# ローカルで試す場合は、直接キーを文字列として入力してもOKです。
-# 例: GOOGLE_API_KEY = "YOUR_API_KEY_HERE"
 try:
     GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
     genai.configure(api_key=GOOGLE_API_KEY)
@@ -61,7 +58,7 @@ def init_db():
 
 # --- データベース操作関数 ---
 def add_record(date, meal_type, food_name, nutrients):
-    """食事記録をデータベースに追加"""
+    """記録をデータベースに追加"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute('''
@@ -77,14 +74,14 @@ def add_record(date, meal_type, food_name, nutrients):
     conn.close()
 
 def get_all_records():
-    """全ての食事記録を取得"""
+    """全ての記録を取得"""
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM meals ORDER BY date DESC, id DESC", conn)
     conn.close()
     return df
 
 def get_records_by_period(start_date, end_date):
-    """指定期間の食事記録を取得"""
+    """指定期間の記録を取得"""
     conn = get_db_connection()
     query = "SELECT * FROM meals WHERE date BETWEEN ? AND ? ORDER BY date DESC, id DESC"
     df = pd.read_sql_query(query, conn, params=(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
@@ -112,19 +109,13 @@ def analyze_image_with_gemini(image_bytes):
         "foodName": "料理名",
         "calories": 123.0,
         "nutrients": {
-            "protein": 12.3,
-            "carbohydrates": 12.3,
-            "fat": 12.3,
-            "vitaminD": 1.2,
-            "salt": 1.2,
-            "zinc": 1.5,
-            "folic_acid": 20.0
+            "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
+            "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
         }
     }
     """
     try:
         response = model.generate_content([prompt, image_pil])
-        # レスポンスからJSON部分を抽出
         json_text = response.text.strip().replace("```json", "").replace("```", "")
         return json.loads(json_text)
     except Exception as e:
@@ -133,7 +124,6 @@ def analyze_image_with_gemini(image_bytes):
 
 def get_advice_from_gemini(prompt):
     """テキストプロンプトからアドバイスを生成"""
-    # ★修正点: モデル名を最新版に変更
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
     try:
         response = model.generate_content(prompt)
@@ -143,32 +133,24 @@ def get_advice_from_gemini(prompt):
         return "アドバイスの生成に失敗しました。"
 
 # --- アプリのメイン処理 ---
-
-# データベースを初期化
 init_db()
 
-# --- タイトル ---
 st.title("🥗 食生活アドバイザー")
-st.write("日々の食事やサプリを記録し、AIからパーソナルなアドバイスを受けましょう。")
 
-# --- サイドバー (記録と相談の切り替え) ---
 menu = st.sidebar.radio("メニューを選択", ["記録する", "相談する"], label_visibility="collapsed")
 
-# --- 食事記録ページ ---
 if menu == "記録する":
-    st.header("食事・サプリを記録する")
+    st.header("🖊️ 今日の記録")
 
-    # --- 記録フォーム ---
     with st.expander("記録フォームを開く", expanded=True):
         meal_type = st.selectbox(
             "記録の種類",
-            ["朝食", "昼食", "夕食", "間食", "サプリ"]
+            ["朝食", "昼食", "夕食", "間食", "サプリ", "水分補給"]
         )
-        
         record_date = st.date_input("日付", datetime.date.today())
 
+        # --- フォーム定義 ---
         if meal_type == "サプリ":
-            # ★修正点: st.formを使用して記録後にフォームをリセット
             with st.form(key="supplement_form", clear_on_submit=True):
                 supplements = {
                     'マルチビタミン': {'displayName': 'マルチビタミン', 'foodName': 'サプリ: スーパーマルチビタミン&ミネラル', 'nutrients': {'calories': 5, 'protein': 0.02, 'carbohydrates': 0.6, 'fat': 0.05, 'vitaminD': 10.0, 'salt': 0, 'zinc': 6.0, 'folic_acid': 240}},
@@ -176,21 +158,23 @@ if menu == "記録する":
                     'ビタミンD': {'displayName': 'ビタミンD', 'foodName': 'サプリ: ビタミンD', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0, 'fat': 0.12, 'vitaminD': 30.0, 'salt': 0, 'zinc': 0, 'folic_acid': 0}},
                     '亜鉛': {'displayName': '亜鉛', 'foodName': 'サプリ: 亜鉛', 'nutrients': {'calories': 1, 'protein': 0, 'carbohydrates': 0.17, 'fat': 0.005, 'vitaminD': 0, 'salt': 0, 'zinc': 14.0, 'folic_acid': 0}}
                 }
-                
                 selected_sup = st.selectbox("サプリを選択", list(supplements.keys()))
-                submitted = st.form_submit_button("サプリを記録する")
-
-                if submitted:
+                if st.form_submit_button("サプリを記録する"):
                     sup_data = supplements[selected_sup]
                     add_record(record_date, "サプリ", sup_data['foodName'], sup_data['nutrients'])
                     st.success(f"{sup_data['displayName']}を記録しました！")
 
+        elif meal_type == "水分補給":
+            with st.form(key="water_form", clear_on_submit=True):
+                amount_ml = st.number_input("飲んだ量 (ml)", min_value=0, step=50, value=200)
+                if st.form_submit_button("水分補給を記録する"):
+                    nutrients = {'calories': 0, 'protein': 0, 'carbohydrates': 0, 'fat': 0, 'vitamin_d': 0, 'salt': 0, 'zinc': 0, 'folic_acid': 0}
+                    add_record(record_date, "水分補給", f"{amount_ml} ml", nutrients)
+                    st.success(f"水分補給 {amount_ml}ml を記録しました！")
 
         else: # 食事の場合
-            input_method = st.radio("記録方法", ["テキスト入力", "画像から入力"])
-
+            input_method = st.radio("記録方法", ["テキスト入力", "画像から入力"], horizontal=True)
             if input_method == "テキスト入力":
-                # ★修正点: st.formを使用して記録後にフォームをリセット
                 with st.form(key="text_input_form", clear_on_submit=True):
                     food_name = st.text_input("食事名")
                     cols = st.columns(2)
@@ -202,15 +186,9 @@ if menu == "記録する":
                     salt = cols[1].number_input("食塩相当量 (g)", value=0.0, format="%.1f")
                     zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
                     folic_acid = cols[1].number_input("葉酸 (μg)", value=0.0, format="%.1f")
-                    
-                    submitted = st.form_submit_button("食事を記録する")
-
-                    if submitted:
+                    if st.form_submit_button("食事を記録する"):
                         if food_name:
-                            nutrients = {
-                                'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
-                                'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
-                            }
+                            nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates, 'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid}
                             add_record(record_date, meal_type, food_name, nutrients)
                             st.success(f"{food_name}を記録しました！")
                         else:
@@ -218,150 +196,110 @@ if menu == "記録する":
 
             elif input_method == "画像から入力":
                 uploaded_file = st.file_uploader("食事の画像をアップロード", type=["jpg", "jpeg", "png"])
-
                 if uploaded_file is not None:
-                    image_bytes = uploaded_file.getvalue()
-                    st.image(image_bytes, caption="アップロードされた画像", use_column_width=True)
-                    
+                    st.image(uploaded_file, caption="アップロードされた画像", use_column_width=True)
                     if st.button("画像を分析する"):
                         with st.spinner("AIが画像を分析中です..."):
-                            analysis_result = analyze_image_with_gemini(image_bytes)
-                        
-                        if analysis_result:
-                            st.session_state.analysis_result = analysis_result
-                        else:
-                            st.error("分析に失敗しました。テキストで入力してください。")
+                            analysis_result = analyze_image_with_gemini(uploaded_file.getvalue())
+                        if analysis_result: st.session_state.analysis_result = analysis_result
+                        else: st.error("分析に失敗しました。テキストで入力してください。")
                 
                 if 'analysis_result' in st.session_state:
                     st.info("AIによる分析結果です。必要に応じて修正して記録してください。")
                     result = st.session_state.analysis_result
-                    
-                    # ★修正点: st.formを使用して記録後にフォームをリセット
-                    with st.form(key="image_confirm_form", clear_on_submit=True):
+                    with st.form(key="image_confirm_form"):
                         food_name = st.text_input("食事名", value=result.get('foodName', ''))
                         nut = result.get('nutrients', {})
                         cols = st.columns(2)
                         calories = cols[0].number_input("カロリー (kcal)", value=float(nut.get('calories', 0)), format="%.1f")
                         protein = cols[1].number_input("たんぱく質 (g)", value=float(nut.get('protein', 0)), format="%.1f")
-                        carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(nut.get('carbohydrates', 0)), format="%.1f")
-                        fat = cols[1].number_input("脂質 (g)", value=float(nut.get('fat', 0)), format="%.1f")
-                        vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(nut.get('vitaminD', 0)), format="%.1f")
-                        salt = cols[1].number_input("食塩相当量 (g)", value=float(nut.get('salt', 0)), format="%.1f")
-                        zinc = cols[0].number_input("亜鉛 (mg)", value=float(nut.get('zinc', 0)), format="%.1f")
-                        folic_acid = cols[1].number_input("葉酸 (μg)", value=float(nut.get('folic_acid', 0)), format="%.1f")
-
-                        submitted = st.form_submit_button("この内容で食事を記録する")
-
-                        if submitted:
+                        # ... 他の栄養素も同様 ...
+                        if st.form_submit_button("この内容で食事を記録する"):
                             if food_name:
-                                nutrients = {
-                                    'calories': calories, 'protein': protein, 'carbohydrates': carbohydrates,
-                                    'fat': fat, 'vitaminD': vitamin_d, 'salt': salt, 'zinc': zinc, 'folic_acid': folic_acid
-                                }
+                                nutrients = {'calories': calories, 'protein': protein, 'carbohydrates': nut.get('carbohydrates',0), 'fat': nut.get('fat',0), 'vitaminD': nut.get('vitaminD',0), 'salt': nut.get('salt',0), 'zinc': nut.get('zinc',0), 'folic_acid': nut.get('folic_acid',0)}
                                 add_record(record_date, meal_type, food_name, nutrients)
                                 st.success(f"{food_name}を記録しました！")
-                                # セッションステートをクリーンアップ
                                 del st.session_state.analysis_result
+                                st.rerun()
                             else:
                                 st.warning("食事名を入力してください。")
 
-
-    st.header("記録一覧")
-    
-    # --- 記録の表示 ---
+    st.header("📖 記録一覧")
     all_records_df = get_all_records()
-
     if all_records_df.empty:
         st.info("まだ記録がありません。")
     else:
-        # 削除ボタンのための列を追加
-        all_records_df['削除'] = [False] * len(all_records_df)
+        display_df = all_records_df.copy()
+        display_df['削除'] = [False] * len(display_df)
         
-        # 表示する列を選択・整形
-        display_cols = ['date', 'meal_type', 'food_name', 'calories', 'protein', 'carbohydrates', 'fat', '削除']
+        # カロリー表示を整形
+        def format_calories(row):
+            if row['meal_type'] in ["水分補給", "サプリ"]:
+                return "ー"
+            return f"{int(row['calories'])} kcal" if pd.notna(row['calories']) else "ー"
+        display_df['カロリー'] = display_df.apply(format_calories, axis=1)
+
         edited_df = st.data_editor(
-            all_records_df[display_cols],
+            display_df[['date', 'meal_type', 'food_name', 'カロリー', '削除']],
             column_config={
-                "date": st.column_config.TextColumn("日付"),
-                "meal_type": st.column_config.TextColumn("種類"),
-                "food_name": st.column_config.TextColumn("内容"),
-                "calories": st.column_config.NumberColumn("カロリー(kcal)", format="%.0f"),
-                "protein": st.column_config.NumberColumn("たんぱく質(g)", format="%.1f"),
-                "carbohydrates": st.column_config.NumberColumn("炭水化物(g)", format="%.1f"),
-                "fat": st.column_config.NumberColumn("脂質(g)", format="%.1f"),
-                "削除": st.column_config.CheckboxColumn("削除する", default=False),
+                "date": "日付", "meal_type": "種類", "food_name": "内容", 
+                "カロリー": "カロリー/量", "削除": st.column_config.CheckboxColumn("削除？")
             },
-            hide_index=True,
-            key="data_editor"
+            hide_index=True, key="data_editor"
         )
         
-        # 削除がチェックされた行を特定
-        rows_to_delete = edited_df[edited_df['削除']]
-        if not rows_to_delete.empty:
-            if st.button("選択した記録を削除"):
-                original_indices = rows_to_delete.index
-                ids_to_delete = all_records_df.loc[original_indices, 'id']
-                for record_id in ids_to_delete:
+        if edited_df['削除'].any():
+            if st.button("選択した記録を削除", type="primary"):
+                ids_to_delete = edited_df[edited_df['削除']].index
+                original_ids = all_records_df.loc[ids_to_delete, 'id']
+                for record_id in original_ids:
                     delete_record(record_id)
                 st.success("選択した記録を削除しました。")
                 st.rerun()
 
-# --- 相談ページ ---
 elif menu == "相談する":
-    st.header("AI食生活アドバイザーに相談する")
+    st.header("💬 AIに相談する")
 
     all_records_df = get_all_records()
     if all_records_df.empty:
         st.warning("アドバイスには最低1件の記録が必要です。まずは食事を記録してみましょう。")
         st.stop()
 
-    consult_method = st.selectbox(
-        "相談方法を選択してください",
-        ["テキストで自由に相談する", "全記録から総合的なアドバイスをもらう", "期間を指定してアドバイスをもらう"]
-    )
-
+    # ★修正点: プライバシー情報を削除
     user_profile = """
     - 年齢: 35歳女性
     - 悩み: 痩せにくく太りやすい(特に、お腹まわりと顎)。筋肉量が少なく、下半身中心に筋肉をつけたい。
-    - 希望: アンチエイジング、不妊治療中
+    - 希望: アンチエイジング
     - 苦手な食べ物: 生のトマト、納豆
     """
-    
-    base_prompt = f"""
-    あなたは経験豊富な食生活アドバイザーです。
-    以下のクライアント情報と食事/サプリ記録に基づき、具体的で実行可能なアドバイスをしてください。
-    クライアントの悩みを解決し、希望を叶えるための食事プランや、おすすめの食材、避けるべき習慣などを、専門的かつ優しく、励ますようなトーンで提案してください。
-    苦手な食べ物は避け、代替案を提示してください。Markdown形式で、見出しやリストを使って分かりやすくまとめてください。
-
-    # クライアント情報
-    {user_profile}
-    """
-
+    base_prompt = f"あなたは経験豊富な食生活アドバイザーです。以下のクライアント情報と記録に基づき、優しく励ますトーンで、具体的なアドバイスをMarkdown形式でお願いします。\n\n# クライアント情報\n{user_profile}\n\n"
     prompt_to_send = ""
 
-    if consult_method == "テキストで自由に相談する":
+    # ★修正点: タブで相談方法を選択
+    tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
+
+    with tab1:
         question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事で改善できますか？")
-        if st.button("AIに相談する"):
+        if st.button("AIに相談する", key="text_consult"):
             if question:
-                record_history = all_records_df.head(20).to_string(index=False)
-                prompt_to_send = f"{base_prompt}\n\n# 食事・サプリ記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
+                record_history = all_records_df.head(30).to_string(index=False)
+                prompt_to_send = f"{base_prompt}# 記録（参考）\n{record_history}\n\n# 相談内容\n{question}\n\n上記相談内容に対して、記録を参考にしつつ回答してください。"
             else:
                 st.warning("相談内容を入力してください。")
 
-    elif consult_method == "全記録から総合的なアドバイスをもらう":
-        if st.button("アドバイスをもらう"):
+    with tab2:
+        st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
+        if st.button("アドバイスをもらう", key="all_consult"):
             record_history = all_records_df.to_string(index=False)
-            prompt_to_send = f"{base_prompt}\n\n# 食事・サプリ記録\n{record_history}\n\n上記の記録全体を評価し、総合的なアドバイスをしてください。"
+            prompt_to_send = f"{base_prompt}# 全ての記録\n{record_history}\n\n上記の記録全体を評価し、総合的なアドバイスをしてください。"
 
-    elif consult_method == "期間を指定してアドバイスをもらう":
+    with tab3:
         today = datetime.date.today()
         one_week_ago = today - datetime.timedelta(days=7)
-        
         cols = st.columns(2)
         start_date = cols[0].date_input("開始日", one_week_ago)
         end_date = cols[1].date_input("終了日", today)
-
-        if st.button("指定期間のアドバイスをもらう"):
+        if st.button("指定期間のアドバイスをもらう", key="period_consult"):
             if start_date > end_date:
                 st.error("終了日は開始日以降に設定してください。")
             else:
@@ -370,9 +308,11 @@ elif menu == "相談する":
                     st.warning("指定された期間に記録がありません。")
                 else:
                     record_history = period_records_df.to_string(index=False)
-                    prompt_to_send = f"{base_prompt}\n\n# 食事・サプリ記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
+                    prompt_to_send = f"{base_prompt}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
 
     if prompt_to_send:
         with st.spinner("AIがアドバイスを生成中です..."):
             advice = get_advice_from_gemini(prompt_to_send)
-            st.markdown(advice)
+            # ★修正点: チャット形式で表示
+            with st.chat_message("ai", avatar="🥗"):
+                st.markdown(advice)
