@@ -980,28 +980,11 @@ prompt_full = f"""
             st.info("今までの全ての記録を総合的に分析し、アドバイスをします。")
             if st.button("アドバイスをもらう", key="all_consult"):
                 record_history = all_records_df.to_string(index=False)
-                prompt_to_send = f"{prompt_full}# 全ての記録
+                prompt_to_send = f"""{prompt_full}# 全ての記録
 {record_history}
 
-記録データに即した網羅的な分析レポートを出力してください。"
-
-        with tab3:
-            today = datetime.date.today()
-            one_week_ago = today - datetime.timedelta(days=7)
-            cols = st.columns(2)
-            start_date = cols[0].date_input("開始日", one_week_ago)
-            end_date = cols[1].date_input("終了日", today)
-            if st.button("指定期間のアドバイスをもらう", key="period_consult"):
-                if start_date > end_date:
-                    st.error("終了日は開始日以降に設定してください。")
-                else:
-                    period_records_df = get_records_by_period(start_date, end_date)
-                    if period_records_df.empty:
-                        st.warning("指定された期間に記録がありません。")
-                    else:
-                        record_history = period_records_df.to_string(index=False)
-                        prompt_to_send = (
-                            f"{prompt_qna}# 記録 ({start_date} ~ {end_date})\n{record_history}\n\n上記の指定期間の記録を評価し、アドバイスをしてください。"
+記録データに即した網羅的な分析レポートを出力してください。
+"""
                         )
 
         if prompt_to_send:
