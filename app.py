@@ -222,29 +222,34 @@ def delete_record(record_id):
 def get_advice_from_gemini(prompt: str) -> str:
     """テキストプロンプトからアドバイスを生成（gemini-2.5-flash）。"""
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         resp = model.generate_content(prompt)
         return (resp.text or "").strip()
     except Exception as e:
         st.error(f"アドバイス生成中にエラーが発生しました: {e}")
         return "アドバイスの生成に失敗しました。"
 
+# ★改修要望1 & 2: JSON構造を変更し、料理ごとの内訳と根拠を要求
 def analyze_image_with_gemini(image_bytes):
-    """画像を解析し、{ foodName, calories, nutrients{...} } を返す。"""
-    model_candidates = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    """画像を解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
+    model_candidates = ["gemini-1.5-flash-latest", "gemini-1.5-pro-latest"]
     image_pil = Image.open(io.BytesIO(image_bytes))
     prompt = (
         """
         あなたは栄養管理の専門家です。この食事の画像を分析してください。
-        食事に含まれる料理名を特定し、全体の総カロリー(kcal)、たんぱく質(g)、炭水化物(g)、脂質(g)、ビタミンD(μg)、食塩相当量(g)、亜鉛(mg)、葉酸(μg)を推定してください。
+        食事に含まれる料理を**すべて**特定し、**料理ごと**に栄養素を推定してください。
         結果は必ず以下のJSON形式で、数値のみを返してください。説明や```json```は不要です。
+
         {
-            "foodName": "料理名",
-            "calories": 123.0,
-            "nutrients": {
-                "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
-                "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
+          "summary": "食事全体の短い要約（例：焼き魚定食とビール）",
+          "totalNutrients": { "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0, "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0 },
+          "dishes": [
+            {
+              "name": "料理名1",
+              "rationale": "推定の簡単な根拠（例：鮭の切り身80gを基準）",
+              "nutrients": { "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0, "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0 }
             }
+          ]
         }
         """
     )
@@ -255,7 +260,7 @@ def analyze_image_with_gemini(image_bytes):
             resp = model.generate_content([prompt, image_pil])
             txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
             data = json.loads(txt)
-            if isinstance(data, dict) and "nutrients" in data:
+            if isinstance(data, dict) and "dishes" in data and "totalNutrients" in data:
                 return data
         except Exception as e:
             last_err = e
@@ -263,25 +268,28 @@ def analyze_image_with_gemini(image_bytes):
     st.error(f"画像分析に失敗しました（フォールバックも不可）: {last_err}")
     return None
 
-# ★改修要望2: フリーテキストから栄養素を推定する新機能
+# ★改修要望1 & 2: JSON構造を変更し、料理ごとの内訳と根拠を要求
 def analyze_text_with_gemini(description: str):
-    """フリーテキストを解析し、{ foodName, calories, nutrients{...} } を返す。"""
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    """フリーテキストを解析し、料理ごとの内訳と合計値を含むJSONを返す。"""
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
     prompt = (
         f"""
         あなたは栄養管理の専門家です。以下の食事内容の記述を分析してください。
-        食事に含まれる料理名を特定し、全体の総カロリー(kcal)、たんぱく質(g)、炭水化物(g)、脂質(g)、ビタミンD(μg)、食塩相当量(g)、亜鉛(mg)、葉酸(μg)を推定してください。
+        食事に含まれる料理を**すべて**特定し、**料理ごと**に栄養素を推定してください。
         結果は必ず以下のJSON形式で、数値のみを返してください。説明や```json```は不要です。
 
         食事内容: "{description}"
 
         {{
-            "foodName": "（推定した食事名、例：飲み会での食事）",
-            "calories": 123.0,
-            "nutrients": {{
-                "protein": 12.3, "carbohydrates": 12.3, "fat": 12.3,
-                "vitaminD": 1.2, "salt": 1.2, "zinc": 1.5, "folic_acid": 20.0
+          "summary": "食事全体の短い要約（例：飲み会での食事）",
+          "totalNutrients": {{ "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0, "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0 }},
+          "dishes": [
+            {{
+              "name": "料理名1",
+              "rationale": "推定の簡単な根拠（例：焼き鳥タレ5本を基準）",
+              "nutrients": {{ "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0, "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0 }}
             }}
+          ]
         }}
         """
     )
@@ -289,7 +297,7 @@ def analyze_text_with_gemini(description: str):
         resp = model.generate_content(prompt)
         txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
         data = json.loads(txt)
-        if isinstance(data, dict) and "nutrients" in data:
+        if isinstance(data, dict) and "dishes" in data and "totalNutrients" in data:
             return data
     except Exception as e:
         st.error(f"テキスト分析中にエラーが発生しました: {e}")
@@ -354,7 +362,7 @@ def _parse_fraction_jp(text: str):
 
 def _refine_by_note(food_name: str, nutrients: dict, note: str):
     """補足説明を反映して、料理名/栄養値の上書き案を返す。失敗時は None。"""
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
     base_json = json.dumps({"foodName": food_name, "nutrients": nutrients}, ensure_ascii=False)
     schema = """
 以下のJSONのみを返してください。説明不要。コードフェンス不要。
@@ -362,13 +370,13 @@ def _refine_by_note(food_name: str, nutrients: dict, note: str):
   "foodName": "料理名（変更不要ならそのまま）",
   "nutrients": {
     "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0,
-    "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0
+    "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0
   },
   "note": "補正内容の要約（20字以内）"
 }
 """
     prompt_parts = [
-        "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
+        "あなたは管理栄養士です。ユーザーの補足説明を反映して、現在の推定値を必要に応じて上書きしてください。単位: calories(kcal), protein/carbohydrates/fat(g), vitaminD(μg), salt(g), zinc(mg), folic_acid(μg)。可能な範囲で妥当な値に丸めてください（1〜2桁）。",
         "現在の推定: " + base_json + "\n補足: " + (note or ""),
         schema,
     ]
@@ -404,7 +412,7 @@ def _nl_to_plan(question: str) -> dict:
 }
 """
     try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         prompt = f"""ユーザーの質問:
 {question}
 
@@ -522,7 +530,7 @@ ALLOWED_COLS = {"id","date","meal_type","food_name","calories","protein","carboh
 def llm_to_sql(question: str) -> dict:
     """自然文から安全なSQL(JSON)を生成する。Gemini 2.5 Flash を使用。"""
     today_jst = (datetime.datetime.utcnow() + datetime.timedelta(hours=9)).date().strftime("%Y-%m-%d")
-    model = genai.GenerativeModel("gemini-2.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
     schema_tmpl = """
 あなたはSQLite用のSQLアシスタントです。次の制約を必ず守ってください:
 - SELECT文のみ。INSERT/UPDATE/DELETE/ALTER/DROP は禁止（セミコロン含む）。
@@ -635,7 +643,6 @@ if menu == "記録する":
         # type + date
         left, right = st.columns([1, 1])
         with left:
-            # ★改修要望1: 「プロテイン」を追加
             meal_type = st.selectbox(
                 "記録の種類",
                 ["朝食", "昼食", "夕食", "間食", "プロテイン", "サプリ", "水分補給"],
@@ -644,17 +651,14 @@ if menu == "記録する":
         with right:
             record_date = st.date_input("日付", datetime.date.today())
         
-        # ---- プロテイン ----
-        # ★改修要望1: 「プロテイン」用の入力フォームを新設
         if meal_type == "プロテイン":
             with st.form(key="protein_form", clear_on_submit=True):
                 protein_amount = st.number_input("たんぱく質の量 (g)", min_value=0.0, step=0.1, value=20.0, format="%.1f")
                 if st.form_submit_button("プロテインを記録する", use_container_width=True):
-                    nutrients = { "protein": protein_amount, "calories": protein_amount * 4 } # カロリーはたんぱく質1g=4kcalで簡易計算
+                    nutrients = { "protein": protein_amount, "calories": protein_amount * 4 } 
                     add_record(record_date, "プロテイン", f"プロテイン {protein_amount}g", nutrients)
                     st.success(f"プロテイン {protein_amount}g を記録しました！")
 
-        # ---- サプリ ----
         elif meal_type == "サプリ":
             with st.form(key="supplement_form", clear_on_submit=True):
                 supplements = {
@@ -669,7 +673,6 @@ if menu == "記録する":
                     add_record(record_date, "サプリ", sup_data["foodName"], sup_data["nutrients"])
                     st.success(f"{sup_data['displayName']}を記録しました！")
 
-        # ---- 水分 ----
         elif meal_type == "水分補給":
             with st.form(key="water_form", clear_on_submit=True):
                 amount_ml = st.number_input("飲んだ量 (ml)", min_value=0, step=50, value=200)
@@ -678,12 +681,9 @@ if menu == "記録する":
                     add_record(record_date, "水分補給", f"{amount_ml} ml", nutrients)
                     st.success(f"水分補給 {amount_ml}ml を記録しました！")
 
-        # ---- 食事 ----
-        else:
-            # ★改修要望2: 入力方法を3パターンに変更
+        else: 
             input_method = st.radio("記録方法", ["栄養素手入力", "フリー記述入力", "画像から入力"], horizontal=True)
 
-            # manual
             if input_method == "栄養素手入力":
                 with st.form(key="text_input_form", clear_on_submit=True):
                     food_name = st.text_input("食事名", placeholder="例）鮭の塩焼き定食 など")
@@ -704,7 +704,6 @@ if menu == "記録する":
                         else:
                             st.warning("食事名を入力してください。")
             
-            # ★改修要望2: フリー記述入力のUIを新設
             elif input_method == "フリー記述入力":
                 description = st.text_area("食事の内容を自由に入力してください", placeholder="例：飲み会で、焼き鳥を5本（タレ）、ビールを2杯、枝豆を食べた")
                 if st.button("AIで栄養素を推定する", use_container_width=True):
@@ -718,7 +717,6 @@ if menu == "記録する":
                     else:
                         st.warning("食事の内容を入力してください。")
 
-            # image
             elif input_method == "画像から入力":
                 uploaded_file = st.file_uploader("食事の画像をアップロード", type=["jpg", "jpeg", "png"])
                 if uploaded_file is not None:
@@ -731,13 +729,24 @@ if menu == "記録する":
                         else:
                             st.error("分析に失敗しました。テキストで入力してください。")
             
-            # ★改修要望2: 画像入力とフリー記述入力の共通確認フォーム
+            # ★改修要望1 & 2: 分析結果の表示と確認フローを刷新
             if input_method in ["フリー記述入力", "画像から入力"] and "analysis_result" in st.session_state:
-                st.info("AIの推定値を確認し、必要に応じて量を調整してから記録してください。")
+                st.info("AIの推定結果です。内容を確認し、量を調整してから記録してください。")
                 result = st.session_state.analysis_result
-                base_food = result.get("foodName", "")
-                base_nut = result.get("nutrients", {})
-                base_pack = {"calories": float(result.get("calories", 0) or 0.0), **base_nut}
+                
+                # 料理ごとの内訳を表示
+                st.markdown("##### AIによる推定内訳")
+                dishes_df = pd.DataFrame(result.get("dishes", []))
+                if not dishes_df.empty:
+                    nutrients_df = pd.json_normalize(dishes_df['nutrients'])
+                    display_dishes = pd.concat([dishes_df[['name', 'rationale']], nutrients_df], axis=1)
+                    st.dataframe(display_dishes.rename(columns={
+                        "name": "料理名", "rationale": "推定根拠", "calories": "cal", "protein": "P",
+                        "carbohydrates": "C", "fat": "F", "vitaminD": "VitD", "salt": "塩分", "zinc": "亜鉛"
+                    }), use_container_width=True)
+                
+                base_food = result.get("summary", "")
+                base_pack = result.get("totalNutrients", {})
 
                 if "serve_factor" not in st.session_state:
                     st.session_state.serve_factor = 1.0
@@ -754,7 +763,7 @@ if menu == "記録する":
                     if bcols[5].button("1.5x"): st.session_state.serve_factor = 1.5
                     if bcols[6].button("2x"):  st.session_state.serve_factor = 2.0
                     st.session_state.serve_factor = st.slider("係数", 0.1, 2.0, float(st.session_state.serve_factor), 0.05)
-                    instr = st.text_input("自然言語で量を指定（例：半分、3分の1、1.5倍、30%）", key="serve_text")
+                    instr = st.text_input("自然言語で量を指定（例：半分）", key="serve_text")
                     if st.button("反映", key="serve_apply") and instr.strip():
                         f = _parse_fraction_jp(instr)
                         if f is not None:
@@ -768,7 +777,7 @@ if menu == "記録する":
                 effective = st.session_state.get("supp_nutrients", scaled) if st.session_state.get("supp_adopted") else scaled
 
                 with fc1:
-                    st.caption("プレビュー（現在の反映値）")
+                    st.caption("プレビュー（合計値）")
                     m1, m2, m3, m4 = st.columns(4)
                     m1.metric("カロリー", f"{effective['calories']:.0f} kcal")
                     m2.metric("たんぱく質", f"{effective['protein']:.1f} g")
@@ -776,20 +785,20 @@ if menu == "記録する":
                     m4.metric("脂質", f"{effective['fat']:.1f} g")
 
                 st.divider()
-                st.caption("この料理についての補足説明（任意）")
-                note = st.text_area("補足を入力", key="meal_note", placeholder="例：豚肉は70gくらい、味噌汁は具少なめ など")
+                st.caption("この食事全体についての補足説明（任意）")
+                note = st.text_area("補足を入力", key="meal_note", placeholder="例：ご飯は少なめにした、ドレッシングは使わなかった など")
 
                 current_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
                 current_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
 
-                if st.button("補足を解析して反映案を作る", key="apply_note_btn"):
+                if st.button("補足を解析して合計値を修正", key="apply_note_btn"):
                     with st.spinner("補足を解析中..."):
                         cand = _refine_by_note(current_food or "料理", current_pack, note or "")
                     if cand and "nutrients" in cand:
                         st.session_state.supp_candidate = cand
-                        st.success("反映案を作成しました。下の比較を確認してください。")
+                        st.success("修正案を作成しました。下の比較を確認してください。")
                     else:
-                        st.warning("補足の解釈に失敗しました。もう少し具体的に書いてください。")
+                        st.warning("補足の解釈に失敗しました。")
 
                 if "supp_candidate" in st.session_state:
                     cand = st.session_state.supp_candidate
@@ -797,28 +806,29 @@ if menu == "記録する":
                     cand_pack = cand.get("nutrients") or current_pack
                     c1, c2 = st.columns(2)
                     with c1:
-                        st.caption("現在の値")
+                        st.caption("現在の合計値")
                         st.dataframe(pd.DataFrame([current_pack]))
                     with c2:
-                        st.caption("反映案")
+                        st.caption("修正案")
                         st.dataframe(pd.DataFrame([cand_pack]))
                     a1, a2 = st.columns(2)
-                    if a1.button("この変更を採用", key="accept_note"):
+                    if a1.button("この修正を採用", key="accept_note"):
                         st.session_state.supp_food_name = cand_food
                         st.session_state.supp_nutrients = cand_pack
                         st.session_state.supp_adopted = True
                         del st.session_state.supp_candidate
-                        st.success("補足を反映しました。さらに追記して微調整もできます。")
+                        st.success("補足を反映しました。")
                         st.rerun()
-                    if a2.button("反映案を破棄", key="discard_note"):
+                    if a2.button("修正案を破棄", key="discard_note"):
                         del st.session_state.supp_candidate
-                        st.info("反映案を破棄しました。")
+                        st.info("修正案を破棄しました。")
 
                 final_food = st.session_state.get("supp_food_name", base_food) if st.session_state.get("supp_adopted") else base_food
                 final_pack = st.session_state.get("supp_nutrients", effective) if st.session_state.get("supp_adopted") else effective
 
                 with st.form(key="image_confirm_form"):
-                    food_name = st.text_input("食事名", value=final_food)
+                    food_name = st.text_input("記録名", value=final_food)
+                    st.caption("最終的な合計値を手動で修正することもできます。")
                     cols = st.columns(2)
                     calories = cols[0].number_input("カロリー (kcal)", value=float(final_pack.get("calories", 0.0)), format="%.1f")
                     protein = cols[1].number_input("たんぱく質 (g)", value=float(final_pack.get("protein", 0.0)), format="%.1f")
