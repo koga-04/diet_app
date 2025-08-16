@@ -1173,7 +1173,7 @@ elif menu == "相談する":
 
         prompt_to_send = ""
 
-        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "� 全記録から分析", "🗓️ 期間で分析"])
+        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
 
         with tab1:
             question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事や運動で改善できますか？")
@@ -1241,4 +1241,3 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
-�
