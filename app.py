@@ -981,10 +981,15 @@ if menu == "食事記録":
         if all_records_df.empty:
             st.info("まだ記録がありません。")
         else:
-            all_records_df['is_favorite'] = all_records_df['is_favorite'].astype(bool)
+            # ★修正点: 削除列を追加
+            display_df = all_records_df.copy()
+            display_df['is_favorite'] = display_df['is_favorite'].astype(bool)
+            display_df["削除"] = False
             
+            # ★修正点: 列の順番を指定し、削除列のconfigを追加
             edited_df = st.data_editor(
-                all_records_df,
+                display_df,
+                column_order=("date", "meal_type", "food_name", "is_favorite", "削除", "calories", "protein", "carbohydrates", "fat"),
                 column_config={
                     "id": None,
                     "date": "日付",
@@ -996,18 +1001,33 @@ if menu == "食事記録":
                     "fat": st.column_config.NumberColumn("F(g)", format="%.1f"),
                     "vitamin_d": None, "salt": None, "zinc": None, "folic_acid": None,
                     "is_favorite": st.column_config.CheckboxColumn("プルダウン登録", width="small"),
+                    "削除": st.column_config.CheckboxColumn("削除？", width="small"),
                 },
                 use_container_width=True,
                 hide_index=True,
                 key="data_editor",
             )
             
+            # 変更を検出してDBに保存
             if not edited_df.equals(all_records_df):
-                diff = edited_df[edited_df['is_favorite'] != all_records_df['is_favorite']]
-                for index, row in diff.iterrows():
-                    update_favorite_status(row['id'], row['is_favorite'])
-                st.success("お気に入り設定を更新しました。")
-                st.rerun()
+                # is_favoriteの変更を検出
+                fav_diff = edited_df[edited_df['is_favorite'] != all_records_df['is_favorite']]
+                if not fav_diff.empty:
+                    for index, row in fav_diff.iterrows():
+                        update_favorite_status(row['id'], row['is_favorite'])
+                    st.success("お気に入り設定を更新しました。")
+                    st.rerun()
+
+            # 削除がチェックされた行を処理
+            if edited_df["削除"].any():
+                btn_col1, btn_col2 = st.columns([1, 3])
+                with btn_col1:
+                    if st.container().button("選択した記録を削除", type="primary", use_container_width=True):
+                        ids_to_delete = edited_df[edited_df["削除"]]["id"]
+                        for rid in ids_to_delete:
+                            delete_record(int(rid))
+                        st.success("選択した記録を削除しました。")
+                        st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
