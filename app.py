@@ -252,7 +252,6 @@ def delete_exercise_record(record_id):
     conn.commit()
     conn.close()
 
-# ★改修要望1: 過去の運動メニューを取得するヘルパー
 def get_unique_exercise_names():
     conn = get_db_connection()
     try:
