@@ -110,6 +110,15 @@ st.markdown(
 
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
+
+  /* ★改修要望2: codeタグのスタイルを修正 */
+  code {
+    background-color: #F3F4F6; /* Light gray background */
+    color: #374151; /* Dark text */
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: monospace;
+  }
 </style>
     """,
     unsafe_allow_html=True,
@@ -347,7 +356,6 @@ def analyze_text_with_gemini(description: str):
         st.error(f"テキスト分析中にエラーが発生しました: {e}")
     return None
 
-# ★改修要望1: 運動記録の自由入力を解析・修正するヘルパー
 def parse_exercise_from_text(text: str):
     """自由入力の運動記録を解析してJSONを返す"""
     model = genai.GenerativeModel("gemini-2.5-flash")
@@ -974,11 +982,10 @@ elif menu == "運動記録":
         st.subheader("運動の記録")
         st.caption("日々の運動を記録して、活動量を管理しましょう。")
         
-        # ★改修要望1: 過去の運動メニューをDBから取得して選択肢に追加
+        # ★修正点: selectboxをformの外に出す
         default_exercises = ["ヨガ", "エアロビクス", "Group Centergy"]
         try:
             past_exercises = get_unique_exercise_names()
-            # デフォルトと過去の記録を結合し、重複を除外してソート
             exercise_options = sorted(list(set(default_exercises + past_exercises)))
         except Exception:
             exercise_options = default_exercises
@@ -1000,9 +1007,9 @@ elif menu == "運動記録":
                     else:
                         st.warning("運動時間を入力してください。")
         else:
-            # ★改修要望1: 「その他」用の自由入力と対話型修正フロー
             st.info("実施した運動内容と時間を自由に入力してください。AIが内容を整理します。")
             free_text_exercise = st.text_area("運動内容と時間", placeholder="例：ジムで筋トレを60分、そのあとランニングを30分")
+            record_date_ex = st.date_input("日付", datetime.date.today())
             
             if st.button("内容を整理して確認", use_container_width=True):
                 if free_text_exercise.strip():
@@ -1010,6 +1017,7 @@ elif menu == "運動記録":
                         parsed_exercise = parse_exercise_from_text(free_text_exercise)
                     if parsed_exercise:
                         st.session_state.exercise_proposal = parsed_exercise
+                        st.session_state.record_date_ex = record_date_ex # 日付を保存
                     else:
                         st.error("内容を解析できませんでした。もう少し具体的に記述してください。")
                 else:
@@ -1024,12 +1032,12 @@ elif menu == "運動記録":
 
                 col1, col2, col_spacer = st.columns([1,1,2])
                 if col1.button("はい、この内容で記録する", type="primary"):
-                    record_date_ex = st.session_state.get('record_date_ex', datetime.date.today())
-                    add_exercise_record(record_date_ex, proposal['name'], proposal['duration'])
+                    record_date_to_save = st.session_state.get('record_date_ex', datetime.date.today())
+                    add_exercise_record(record_date_to_save, proposal['name'], proposal['duration'])
                     st.success(f"{proposal['name']} ({proposal['duration']}分) を記録しました！")
                     # セッションステートをクリーンアップ
-                    for key in st.session_state.keys():
-                        if key.startswith('exercise_'):
+                    for key in list(st.session_state.keys()):
+                        if key.startswith('exercise_') or key == 'record_date_ex':
                             del st.session_state[key]
                     st.rerun()
 
