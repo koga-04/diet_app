@@ -180,7 +180,6 @@ def init_db():
         """
     )
     
-    # ★改修要望1: is_favoriteカラムが存在しない場合に備えて追加
     c.execute("PRAGMA table_info(meals)")
     columns = [row['name'] for row in c.fetchall()]
     if 'is_favorite' not in columns:
@@ -244,7 +243,6 @@ def delete_record(record_id):
     conn.commit()
     conn.close()
 
-# ★改修要望1: お気に入り関連のDBヘルパー
 def get_favorite_meals():
     conn = get_db_connection()
     df = pd.read_sql_query("SELECT * FROM meals WHERE is_favorite = 1 ORDER BY food_name ASC", conn)
@@ -961,41 +959,42 @@ if menu == "食事記録":
         if all_records_df.empty:
             st.info("まだ記録がありません。")
         else:
-            display_df = all_records_df.copy()
-            display_df["削除"] = [False] * len(display_df)
+            # ★修正点: is_favoriteをboolに変換
+            all_records_df['is_favorite'] = all_records_df['is_favorite'].astype(bool)
+            
+            # 編集されたデータを保存するためにセッションステートを使用
+            if 'edited_df' not in st.session_state:
+                st.session_state.edited_df = all_records_df.copy()
 
-            def format_calories(row):
-                if row["meal_type"] in ["水分補給", "サプリ", "プロテイン"]:
-                    return "ー"
-                return f"{int(row['calories'])} kcal" if pd.notna(row["calories"]) else "ー"
-
-            display_df["種類"] = display_df["meal_type"]
-            display_df["カロリー/量"] = display_df.apply(format_calories, axis=1)
-
+            # ★修正点: プルダウン登録列を追加
             edited_df = st.data_editor(
-                display_df[["date", "種類", "food_name", "カロリー/量", "削除"]],
+                all_records_df,
                 column_config={
-                    "date": st.column_config.Column("日付"),
-                    "種類": st.column_config.Column("種類", help="記録タイプ"),
-                    "food_name": st.column_config.Column("内容"),
-                    "カロリー/量": st.column_config.Column("カロリー/量"),
-                    "削除": st.column_config.CheckboxColumn("削除？"),
+                    "id": None,
+                    "date": "日付",
+                    "meal_type": "種類",
+                    "food_name": "内容",
+                    "calories": st.column_config.NumberColumn("カロリー", format="%d kcal"),
+                    "protein": st.column_config.NumberColumn("P(g)", format="%.1f"),
+                    "carbohydrates": st.column_config.NumberColumn("C(g)", format="%.1f"),
+                    "fat": st.column_config.NumberColumn("F(g)", format="%.1f"),
+                    "vitamin_d": None, "salt": None, "zinc": None, "folic_acid": None,
+                    "is_favorite": st.column_config.CheckboxColumn("プルダウン登録", width="small"),
                 },
                 use_container_width=True,
                 hide_index=True,
                 key="data_editor",
             )
+            
+            # 変更を検出してDBに保存
+            if not edited_df.equals(all_records_df):
+                # is_favoriteの変更を検出
+                diff = edited_df[edited_df['is_favorite'] != all_records_df['is_favorite']]
+                for index, row in diff.iterrows():
+                    update_favorite_status(row['id'], row['is_favorite'])
+                st.success("お気に入り設定を更新しました。")
+                st.rerun()
 
-            if edited_df["削除"].any():
-                btn_col1, btn_col2 = st.columns([1, 3])
-                with btn_col1:
-                    if st.container().button("選択した記録を削除", type="primary", use_container_width=True):
-                        ids_to_delete = edited_df[edited_df["削除"]].index
-                        original_ids = all_records_df.loc[ids_to_delete, "id"]
-                        for rid in original_ids:
-                            delete_record(int(rid))
-                        st.success("選択した記録を削除しました。")
-                        st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "運動記録":
@@ -1004,7 +1003,6 @@ elif menu == "運動記録":
         st.subheader("運動の記録")
         st.caption("日々の運動を記録して、活動量を管理しましょう。")
         
-        # ★修正点: selectboxをformの外に出す
         default_exercises = ["ヨガ", "エアロビクス", "Group Centergy"]
         try:
             past_exercises = get_unique_exercise_names()
