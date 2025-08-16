@@ -422,7 +422,6 @@ def correct_exercise_from_text(original_data: dict, correction_text: str):
     except Exception:
         return None
 
-# ★改修要望1: 栄養素の対話型修正用ヘルパー
 def refine_nutrition_with_ai(chat_history: list, current_data: dict):
     """栄養素の対話履歴と現在のデータから、修正案を生成する"""
     model = genai.GenerativeModel("gemini-2.5-flash")
@@ -892,7 +891,6 @@ if menu == "食事記録":
                             analysis_result = analyze_text_with_gemini(description)
                         if analysis_result:
                             st.session_state.analysis_result = analysis_result
-                            # ★改修要望1: 対話履歴を初期化
                             st.session_state.nutrition_chat_history = []
                         else:
                             st.error("分析に失敗しました。もう少し具体的に記述してください。")
@@ -908,7 +906,6 @@ if menu == "食事記録":
                             analysis_result = analyze_image_with_gemini(uploaded_file.getvalue())
                         if analysis_result:
                             st.session_state.analysis_result = analysis_result
-                            # ★改修要望1: 対話履歴を初期化
                             st.session_state.nutrition_chat_history = []
                         else:
                             st.error("分析に失敗しました。テキストで入力してください。")
@@ -917,7 +914,6 @@ if menu == "食事記録":
                 st.info("AIの推定結果です。内容を確認し、必要に応じて修正してください。")
                 result = st.session_state.analysis_result
                 
-                # ★改修要望1: 対話履歴の表示
                 if "nutrition_chat_history" in st.session_state:
                     for msg in st.session_state.nutrition_chat_history:
                         with st.chat_message(msg["role"]):
