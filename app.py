@@ -163,7 +163,8 @@ def init_db():
             vitamin_d REAL,
             salt REAL,
             zinc REAL,
-            folic_acid REAL
+            folic_acid REAL,
+            is_favorite INTEGER NOT NULL DEFAULT 0
         )
         """
     )
@@ -178,6 +179,13 @@ def init_db():
         )
         """
     )
+    
+    # ★改修要望1: is_favoriteカラムが存在しない場合に備えて追加
+    c.execute("PRAGMA table_info(meals)")
+    columns = [row['name'] for row in c.fetchall()]
+    if 'is_favorite' not in columns:
+        c.execute("ALTER TABLE meals ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0")
+
     conn.commit()
     conn.close()
 
@@ -235,6 +243,21 @@ def delete_record(record_id):
     c.execute("DELETE FROM meals WHERE id = ?", (record_id,))
     conn.commit()
     conn.close()
+
+# ★改修要望1: お気に入り関連のDBヘルパー
+def get_favorite_meals():
+    conn = get_db_connection()
+    df = pd.read_sql_query("SELECT * FROM meals WHERE is_favorite = 1 ORDER BY food_name ASC", conn)
+    conn.close()
+    return df
+
+def update_favorite_status(meal_id, is_favorite):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("UPDATE meals SET is_favorite = ? WHERE id = ?", (1 if is_favorite else 0, meal_id))
+    conn.commit()
+    conn.close()
+
 
 # CRUD helpers for Exercises
 def add_exercise_record(date, exercise_name, duration_minutes):
