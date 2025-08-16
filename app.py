@@ -111,10 +111,9 @@ st.markdown(
   /* Data editor tweaks */
   [data-testid="stDataFrame"] header, [data-testid="stDataFrame"] thead { background: #FBFDFF; }
 
-  /* ★改修要望2: codeタグのスタイルを修正 */
   code {
-    background-color: #F3F4F6; /* Light gray background */
-    color: #374151; /* Dark text */
+    background-color: #F3F4F6;
+    color: #374151;
     padding: 2px 6px;
     border-radius: 4px;
     font-family: monospace;
