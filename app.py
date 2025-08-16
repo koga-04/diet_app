@@ -347,6 +347,52 @@ def analyze_text_with_gemini(description: str):
         st.error(f"テキスト分析中にエラーが発生しました: {e}")
     return None
 
+# ★改修要望1: 運動記録の自由入力を解析・修正するヘルパー
+def parse_exercise_from_text(text: str):
+    """自由入力の運動記録を解析してJSONを返す"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    prompt = f"""
+    以下のテキストから運動名と時間（分）を抽出し、JSONで返してください。
+    時間は必ず整数にしてください。説明や```json```は不要です。
+    テキスト: "{text}"
+    
+    {{
+      "name": "運動名",
+      "duration": 60
+    }}
+    """
+    try:
+        resp = model.generate_content(prompt)
+        txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+        data = json.loads(txt)
+        if isinstance(data, dict) and "name" in data and "duration" in data:
+            return data
+    except Exception:
+        return None
+
+def correct_exercise_from_text(original_data: dict, correction_text: str):
+    """AIが提案した運動記録をユーザーの指示で修正する"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    prompt = f"""
+    以下の現在の運動記録を、ユーザーの修正指示に従って修正し、新しいJSONを返してください。
+    時間は必ず整数にしてください。説明や```json```は不要です。
+    
+    現在の記録: {json.dumps(original_data, ensure_ascii=False)}
+    修正指示: "{correction_text}"
+    
+    {{
+      "name": "修正後の運動名",
+      "duration": 90
+    }}
+    """
+    try:
+        resp = model.generate_content(prompt)
+        txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+        data = json.loads(txt)
+        if isinstance(data, dict) and "name" in data and "duration" in data:
+            return data
+    except Exception:
+        return None
 
 # =============================
 # Image-chat helpers (portion / supplement refine)
@@ -928,26 +974,80 @@ elif menu == "運動記録":
         st.subheader("運動の記録")
         st.caption("日々の運動を記録して、活動量を管理しましょう。")
         
-        with st.form(key="exercise_form", clear_on_submit=True):
-            ex_left, ex_right = st.columns([2,1])
-            with ex_left:
-                exercise_name = st.selectbox(
-                    "運動メニュー",
-                    ["ヨガ", "エアロビクス", "Group Centergy", "その他（自由入力）"]
-                )
-                if exercise_name == "その他（自由入力）":
-                    exercise_name = st.text_input("運動内容を入力", placeholder="例：ジムで筋トレ")
-            with ex_right:
+        # ★改修要望1: 過去の運動メニューをDBから取得して選択肢に追加
+        default_exercises = ["ヨガ", "エアロビクス", "Group Centergy"]
+        try:
+            past_exercises = get_unique_exercise_names()
+            # デフォルトと過去の記録を結合し、重複を除外してソート
+            exercise_options = sorted(list(set(default_exercises + past_exercises)))
+        except Exception:
+            exercise_options = default_exercises
+        exercise_options.append("その他（自由入力）")
+
+        selected_exercise = st.selectbox(
+            "運動メニュー",
+            exercise_options
+        )
+
+        if selected_exercise != "その他（自由入力）":
+            with st.form(key="exercise_form_select", clear_on_submit=True):
                 duration = st.number_input("運動時間（分）", min_value=0, value=60, step=5)
-
-            record_date_ex = st.date_input("日付", datetime.date.today())
-
-            if st.form_submit_button("運動を記録する", use_container_width=True, type="primary"):
-                if exercise_name and duration > 0:
-                    add_exercise_record(record_date_ex, exercise_name, duration)
-                    st.success(f"{exercise_name} ({duration}分) を記録しました！")
+                record_date_ex = st.date_input("日付", datetime.date.today())
+                if st.form_submit_button("運動を記録する", use_container_width=True, type="primary"):
+                    if duration > 0:
+                        add_exercise_record(record_date_ex, selected_exercise, duration)
+                        st.success(f"{selected_exercise} ({duration}分) を記録しました！")
+                    else:
+                        st.warning("運動時間を入力してください。")
+        else:
+            # ★改修要望1: 「その他」用の自由入力と対話型修正フロー
+            st.info("実施した運動内容と時間を自由に入力してください。AIが内容を整理します。")
+            free_text_exercise = st.text_area("運動内容と時間", placeholder="例：ジムで筋トレを60分、そのあとランニングを30分")
+            
+            if st.button("内容を整理して確認", use_container_width=True):
+                if free_text_exercise.strip():
+                    with st.spinner("AIが内容を解析中..."):
+                        parsed_exercise = parse_exercise_from_text(free_text_exercise)
+                    if parsed_exercise:
+                        st.session_state.exercise_proposal = parsed_exercise
+                    else:
+                        st.error("内容を解析できませんでした。もう少し具体的に記述してください。")
                 else:
-                    st.warning("運動内容と時間を入力してください。")
+                    st.warning("運動内容を入力してください。")
+
+            if "exercise_proposal" in st.session_state:
+                proposal = st.session_state.exercise_proposal
+                st.write("---")
+                st.write(f"AIは以下の内容と解釈しました。この内容で記録しますか？")
+                st.markdown(f"**運動内容:** `{proposal['name']}`")
+                st.markdown(f"**運動時間:** `{proposal['duration']}` 分")
+
+                col1, col2, col_spacer = st.columns([1,1,2])
+                if col1.button("はい、この内容で記録する", type="primary"):
+                    record_date_ex = st.session_state.get('record_date_ex', datetime.date.today())
+                    add_exercise_record(record_date_ex, proposal['name'], proposal['duration'])
+                    st.success(f"{proposal['name']} ({proposal['duration']}分) を記録しました！")
+                    # セッションステートをクリーンアップ
+                    for key in st.session_state.keys():
+                        if key.startswith('exercise_'):
+                            del st.session_state[key]
+                    st.rerun()
+
+                if col2.button("修正する"):
+                    st.session_state.show_exercise_correction = True
+                
+                if st.session_state.get("show_exercise_correction"):
+                    correction_text = st.text_area("修正点を入力してください", placeholder="時間を90分に変更して", key="ex_correction_text")
+                    if st.button("修正を反映"):
+                        with st.spinner("AIが修正案を作成中..."):
+                            new_proposal = correct_exercise_from_text(proposal, correction_text)
+                        if new_proposal:
+                            st.session_state.exercise_proposal = new_proposal
+                            st.session_state.show_exercise_correction = False
+                            st.rerun()
+                        else:
+                            st.error("修正内容を解析できませんでした。")
+
         st.markdown('</div>', unsafe_allow_html=True)
         
     with st.container():
