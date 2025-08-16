@@ -811,7 +811,6 @@ if menu == "食事記録":
             input_method = st.radio("記録方法", ["栄養素手入力", "フリー記述入力", "画像から入力"], horizontal=True)
 
             if input_method == "栄養素手入力":
-                # ★修正点: お気に入り選択機能を追加
                 favorite_meals_df = get_favorite_meals()
                 favorite_options = {"新規入力": None}
                 for index, row in favorite_meals_df.iterrows():
@@ -1174,7 +1173,7 @@ elif menu == "相談する":
 
         prompt_to_send = ""
 
-        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "📊 全記録から分析", "🗓️ 期間で分析"])
+        tab1, tab2, tab3 = st.tabs(["✍️ テキストで相談", "� 全記録から分析", "🗓️ 期間で分析"])
 
         with tab1:
             question = st.text_area("相談内容を入力してください", height=150, placeholder="例：最近疲れやすいのですが、食事や運動で改善できますか？")
@@ -1242,3 +1241,4 @@ elif menu == "相談する":
                 with st.chat_message("ai", avatar="💬"):
                     st.markdown(advice)
         st.markdown('</div>', unsafe_allow_html=True)
+�
