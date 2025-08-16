@@ -422,6 +422,47 @@ def correct_exercise_from_text(original_data: dict, correction_text: str):
     except Exception:
         return None
 
+# ★改修要望1: 栄養素の対話型修正用ヘルパー
+def refine_nutrition_with_ai(chat_history: list, current_data: dict):
+    """栄養素の対話履歴と現在のデータから、修正案を生成する"""
+    model = genai.GenerativeModel("gemini-2.5-flash")
+    prompt = f"""
+あなたは栄養管理の専門家です。以下の対話履歴と現在の栄養素データを基に、ユーザーの最新の修正依頼に回答してください。
+- ユーザーの指示が妥当であれば、栄養素データを修正した新しいJSONを返します。
+- ユーザーの指示が不正確、またはAIの当初の推定が妥当だと思われる場合は、その理由を説明し、栄養素データは修正せずに返します。
+- 回答は必ず以下のJSON形式で、説明や```json```は不要です。
+
+現在の栄養素データ:
+{json.dumps(current_data, ensure_ascii=False, indent=2)}
+
+対話履歴:
+{json.dumps(chat_history, ensure_ascii=False, indent=2)}
+
+{{
+  "response_text": "ユーザーへの返答メッセージ（例：ご指摘ありがとうございます。たんぱく質を修正しました。）",
+  "updated_data": {{
+    "summary": "食事全体の短い要約",
+    "dishes": [
+      {{
+        "name": "料理名1",
+        "rationale": "推定の簡単な根拠",
+        "nutrients": {{ "calories": 0.0, "protein": 0.0, "carbohydrates": 0.0, "fat": 0.0, "vitaminD": 0.0, "salt": 0.0, "zinc": 0.0, "folic_acid": 0.0 }}
+      }}
+    ]
+  }}
+}}
+"""
+    try:
+        resp = model.generate_content(prompt)
+        txt = (resp.text or "").strip().replace("```json", "").replace("```", "")
+        data = json.loads(txt)
+        if isinstance(data, dict) and "response_text" in data and "updated_data" in data:
+            return data
+    except Exception as e:
+        st.error(f"AIによる修正案の作成中にエラーが発生しました: {e}")
+    return None
+
+
 # =============================
 # Image-chat helpers (portion / supplement refine)
 # =============================
@@ -851,6 +892,8 @@ if menu == "食事記録":
                             analysis_result = analyze_text_with_gemini(description)
                         if analysis_result:
                             st.session_state.analysis_result = analysis_result
+                            # ★改修要望1: 対話履歴を初期化
+                            st.session_state.nutrition_chat_history = []
                         else:
                             st.error("分析に失敗しました。もう少し具体的に記述してください。")
                     else:
@@ -865,14 +908,22 @@ if menu == "食事記録":
                             analysis_result = analyze_image_with_gemini(uploaded_file.getvalue())
                         if analysis_result:
                             st.session_state.analysis_result = analysis_result
+                            # ★改修要望1: 対話履歴を初期化
+                            st.session_state.nutrition_chat_history = []
                         else:
                             st.error("分析に失敗しました。テキストで入力してください。")
             
             if input_method in ["フリー記述入力", "画像から入力"] and "analysis_result" in st.session_state:
-                st.info("AIの推定結果です。内容を確認し、量を調整してから記録してください。")
+                st.info("AIの推定結果です。内容を確認し、必要に応じて修正してください。")
                 result = st.session_state.analysis_result
                 
-                st.markdown("##### AIによる推定内訳")
+                # ★改修要望1: 対話履歴の表示
+                if "nutrition_chat_history" in st.session_state:
+                    for msg in st.session_state.nutrition_chat_history:
+                        with st.chat_message(msg["role"]):
+                            st.markdown(msg["content"])
+                
+                st.markdown("##### AIによる現在の推定内訳")
                 dishes_df = pd.DataFrame(result.get("dishes", []))
                 if not dishes_df.empty:
                     nutrients_df = pd.json_normalize(dishes_df['nutrients'])
@@ -882,85 +933,47 @@ if menu == "食事記録":
                         "carbohydrates": "C", "fat": "F", "vitaminD": "VitD", "salt": "塩分", "zinc": "亜鉛"
                     }), use_container_width=True)
                 
-                base_food = result.get("summary", "")
-                
-                dishes = result.get("dishes", [])
-                recalculated_total = {}
-                if dishes:
-                    df_nut = pd.DataFrame([d.get('nutrients', {}) for d in dishes])
-                    recalculated_total = df_nut.sum().to_dict()
-                base_pack = recalculated_total
-
-                if "serve_factor" not in st.session_state:
-                    st.session_state.serve_factor = 1.0
-
-                fc1, fc2 = st.columns([2, 1])
-                with fc2:
-                    st.caption("食べた量（係数）")
-                    bcols = st.columns(7)
-                    if bcols[0].button("1/4"): st.session_state.serve_factor = 0.25
-                    if bcols[1].button("1/3"): st.session_state.serve_factor = 1/3
-                    if bcols[2].button("1/2"): st.session_state.serve_factor = 0.5
-                    if bcols[3].button("2/3"): st.session_state.serve_factor = 2/3
-                    if bcols[4].button("1x"):  st.session_state.serve_factor = 1.0
-                    if bcols[5].button("1.5x"): st.session_state.serve_factor = 1.5
-                    if bcols[6].button("2x"):  st.session_state.serve_factor = 2.0
-                    st.session_state.serve_factor = st.slider("係数", 0.1, 2.0, float(st.session_state.serve_factor), 0.05)
-                    instr = st.text_input("自然言語で量を指定（例：半分）", key="serve_text")
-                    if st.button("反映", key="serve_apply") and instr.strip():
-                        f = _parse_fraction_jp(instr)
-                        if f is not None:
-                            st.session_state.serve_factor = float(f)
-                            st.success(f"係数 {f} を反映しました。")
-                        else:
-                            st.warning("係数を解釈できませんでした。")
-
-                factor = float(st.session_state.serve_factor)
-                scaled = _scale_nutrients(base_pack, factor)
-                
-                with fc1:
-                    st.caption("プレビュー（合計値）")
-                    m1, m2, m3, m4 = st.columns(4)
-                    m1.metric("カロリー", f"{scaled.get('calories', 0):.0f} kcal")
-                    m2.metric("たんぱく質", f"{scaled.get('protein', 0):.1f} g")
-                    m3.metric("炭水化物", f"{scaled.get('carbohydrates', 0):.1f} g")
-                    m4.metric("脂質", f"{scaled.get('fat', 0):.1f} g")
-
                 st.divider()
+                st.markdown("##### この内容で登録しますか？")
                 
-                if st.button("この内訳で食事を記録する", use_container_width=True, type="primary"):
+                col1, col2, col_spacer = st.columns([1,2,2])
+                if col1.button("はい、この内容で記録する", type="primary"):
                     dishes = result.get("dishes", [])
-                    factor = float(st.session_state.get("serve_factor", 1.0))
-                    
                     if not dishes:
                         st.warning("記録する料理がありません。")
                     else:
                         recorded_dishes = []
                         with st.spinner("記録中..."):
                             for dish in dishes:
-                                food_name = dish.get("name")
-                                nutrients = dish.get("nutrients", {})
-                                scaled_nutrients = _scale_nutrients(nutrients, factor)
-                                
-                                full_nutrients = {
-                                    "calories": scaled_nutrients.get("calories"),
-                                    "protein": scaled_nutrients.get("protein"),
-                                    "carbohydrates": scaled_nutrients.get("carbohydrates"),
-                                    "fat": scaled_nutrients.get("fat"),
-                                    "vitaminD": scaled_nutrients.get("vitaminD"),
-                                    "salt": scaled_nutrients.get("salt"),
-                                    "zinc": scaled_nutrients.get("zinc"),
-                                    "folic_acid": scaled_nutrients.get("folic_acid"),
-                                }
-                                
-                                add_record(record_date, meal_type, food_name, full_nutrients)
-                                recorded_dishes.append(food_name)
-
+                                add_record(record_date, meal_type, dish.get("name"), dish.get("nutrients", {}))
+                                recorded_dishes.append(dish.get("name"))
                         st.success(f"{len(recorded_dishes)}件の料理を記録しました: {', '.join(recorded_dishes)}")
                         
-                        for key in ["analysis_result", "serve_factor", "supp_candidate", "supp_food_name", "supp_nutrients", "supp_adopted"]:
-                            st.session_state.pop(key, None)
+                        for key in list(st.session_state.keys()):
+                            if key.startswith('analysis_') or key.startswith('nutrition_'):
+                                del st.session_state[key]
                         st.rerun()
+
+                if col2.button("修正を希望する"):
+                    st.session_state.show_nutrition_correction = True
+
+                if st.session_state.get("show_nutrition_correction"):
+                    correction_text = st.text_area("修正点を自由に入力してください", placeholder="例：焼き鳥は5本じゃなくて3本です。あと、ビールは飲んでいません。", key="nut_correction_text")
+                    if st.button("AIに修正を依頼する"):
+                        if correction_text.strip():
+                            st.session_state.nutrition_chat_history.append({"role": "user", "content": correction_text})
+                            with st.spinner("AIが修正案を作成中です..."):
+                                new_proposal = refine_nutrition_with_ai(st.session_state.nutrition_chat_history, result)
+                            
+                            if new_proposal:
+                                st.session_state.nutrition_chat_history.append({"role": "assistant", "content": new_proposal["response_text"]})
+                                st.session_state.analysis_result = new_proposal["updated_data"]
+                                st.session_state.show_nutrition_correction = False
+                                st.rerun()
+                            else:
+                                st.error("修正案の作成に失敗しました。")
+                        else:
+                            st.warning("修正内容を入力してください。")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
