@@ -811,16 +811,30 @@ if menu == "食事記録":
             input_method = st.radio("記録方法", ["栄養素手入力", "フリー記述入力", "画像から入力"], horizontal=True)
 
             if input_method == "栄養素手入力":
+                # ★修正点: お気に入り選択機能を追加
+                favorite_meals_df = get_favorite_meals()
+                favorite_options = {"新規入力": None}
+                for index, row in favorite_meals_df.iterrows():
+                    favorite_options[row['food_name']] = row.to_dict()
+
+                selected_favorite_key = st.selectbox(
+                    "お気に入りから選択",
+                    options=list(favorite_options.keys()),
+                    index=0
+                )
+                
+                selected_favorite_data = favorite_options.get(selected_favorite_key)
+
                 with st.form(key="text_input_form", clear_on_submit=True):
-                    food_name = st.text_input("食事名", placeholder="例）鮭の塩焼き定食 など")
+                    food_name = st.text_input("食事名", value=selected_favorite_data['food_name'] if selected_favorite_data else "", placeholder="例）鮭の塩焼き定食 など")
                     cols = st.columns(2)
-                    calories = cols[0].number_input("カロリー (kcal)", value=0.0, format="%.1f")
-                    protein = cols[1].number_input("たんぱく質 (g)", value=0.0, format="%.1f")
-                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=0.0, format="%.1f")
-                    fat = cols[1].number_input("脂質 (g)", value=0.0, format="%.1f")
-                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=0.0, format="%.1f")
-                    salt = cols[1].number_input("食塩相当量 (g)", value=0.0, format="%.1f")
-                    zinc = cols[0].number_input("亜鉛 (mg)", value=0.0, format="%.1f")
+                    calories = cols[0].number_input("カロリー (kcal)", value=float(selected_favorite_data['calories'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    protein = cols[1].number_input("たんぱく質 (g)", value=float(selected_favorite_data['protein'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    carbohydrates = cols[0].number_input("炭水化物 (g)", value=float(selected_favorite_data['carbohydrates'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    fat = cols[1].number_input("脂質 (g)", value=float(selected_favorite_data['fat'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    vitamin_d = cols[0].number_input("ビタミンD (μg)", value=float(selected_favorite_data['vitamin_d'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    salt = cols[1].number_input("食塩相当量 (g)", value=float(selected_favorite_data['salt'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
+                    zinc = cols[0].number_input("亜鉛 (mg)", value=float(selected_favorite_data['zinc'] or 0.0) if selected_favorite_data else 0.0, format="%.1f")
 
                     if st.form_submit_button("食事を記録する", use_container_width=True, type="primary"):
                         if food_name:
@@ -959,14 +973,8 @@ if menu == "食事記録":
         if all_records_df.empty:
             st.info("まだ記録がありません。")
         else:
-            # ★修正点: is_favoriteをboolに変換
             all_records_df['is_favorite'] = all_records_df['is_favorite'].astype(bool)
             
-            # 編集されたデータを保存するためにセッションステートを使用
-            if 'edited_df' not in st.session_state:
-                st.session_state.edited_df = all_records_df.copy()
-
-            # ★修正点: プルダウン登録列を追加
             edited_df = st.data_editor(
                 all_records_df,
                 column_config={
@@ -986,9 +994,7 @@ if menu == "食事記録":
                 key="data_editor",
             )
             
-            # 変更を検出してDBに保存
             if not edited_df.equals(all_records_df):
-                # is_favoriteの変更を検出
                 diff = edited_df[edited_df['is_favorite'] != all_records_df['is_favorite']]
                 for index, row in diff.iterrows():
                     update_favorite_status(row['id'], row['is_favorite'])
