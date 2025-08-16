@@ -252,6 +252,15 @@ def delete_exercise_record(record_id):
     conn.commit()
     conn.close()
 
+# ★改修要望1: 過去の運動メニューを取得するヘルパー
+def get_unique_exercise_names():
+    conn = get_db_connection()
+    try:
+        df = pd.read_sql_query("SELECT DISTINCT exercise_name FROM exercises ORDER BY exercise_name", conn)
+        return df['exercise_name'].tolist()
+    finally:
+        conn.close()
+
 
 # =============================
 # Gemini helpers
@@ -912,42 +921,6 @@ if menu == "食事記録":
                             delete_record(int(rid))
                         st.success("選択した記録を削除しました。")
                         st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # ---- Data chat under list ----
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("🧠 記録データに質問する")
-        st.caption("例：『先週のたんぱく質の合計』『今日の朝食』『水分補給の合計』『7/1~7/7のカロリー推移』『今日のたんぱく質の内訳』など")
-        q = st.text_input("質問", key="data_chat_q")
-        use_llm = st.toggle("自由モード（LLMにSQLを作らせる）", value=True, help="あいまい表現や内訳表現に強い。安全性ガードの上でSELECTのみ実行します。")
-        if st.button("送信", key="data_chat_send"):
-            if not q.strip():
-                st.warning("質問を入力してください。")
-            else:
-                if use_llm:
-                    try:
-                        with st.spinner("SQLを作成中..."):
-                            plan = llm_to_sql(q)
-                        st.caption(f"抽出方針(SQL): {json.dumps(plan, ensure_ascii=False)}")
-                        df = _safe_run_sql(plan.get("sql", ""), plan.get("params") or [])
-                        if df.empty:
-                            st.info("該当データがありません。質問の条件を少し変えてみてください。")
-                        else:
-                            st.dataframe(df, use_container_width=True)
-                    except Exception as e:
-                        st.error(f"実行エラー: {e}")
-                else:
-                    with st.spinner("解析中..."):
-                        plan = _nl_to_plan(q)
-                        plan = _postprocess_plan(q, plan)
-                        out_df, summary = _execute_plan(all_records_df, plan)
-                    st.caption(f"抽出方針: {json.dumps(plan, ensure_ascii=False)}")
-                    st.write(summary)
-                    if not out_df.empty:
-                        st.dataframe(out_df, use_container_width=True)
-                    else:
-                        st.info("該当データがありません。キーワードや期間を変えてみてください。")
         st.markdown('</div>', unsafe_allow_html=True)
 
 elif menu == "運動記録":
